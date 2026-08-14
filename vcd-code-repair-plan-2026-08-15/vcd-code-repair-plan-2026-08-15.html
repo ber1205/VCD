@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VCD 全面代码修复方案指导 (2026-08-15)</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --bg2: #ffffff;
+    --ink: #1a2332;
+    --muted: #5b6b80;
+    --rule: #e1e5ec;
+    --accent: #2456d6;
+    --accent2: #0e9f6e;
+    --warn: #c2410c;
+    --err: #b91c1c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+    background: var(--bg); color: var(--ink);
+    font-size: 15.5px; line-height: 1.72;
+  }
+  .container { max-width: 1000px; margin: 0 auto; padding: 0 24px; }
+
+  header.cover {
+    background: linear-gradient(135deg, #1a2332 0%, #2456d6 100%);
+    color: #fff; padding: 60px 24px 44px; margin-bottom: 40px;
+  }
+  header.cover .kicker {
+    text-transform: uppercase; letter-spacing: 0.14em;
+    font-size: 0.82rem; color: #b9c6e8; margin-bottom: 12px;
+  }
+  header.cover h1 { font-size: clamp(1.9rem, 4.2vw, 2.9rem); line-height: 1.12; font-weight: 700; margin-bottom: 14px; }
+  header.cover .sub { font-size: 1.0rem; color: #c9d4f0; max-width: 760px; }
+  header.cover .meta { margin-top: 20px; font-size: 0.84rem; color: #9fb0da; }
+
+  section { margin-bottom: 52px; }
+  h2 {
+    font-size: 1.55rem; font-weight: 700;
+    padding-bottom: 10px; margin-bottom: 20px;
+    border-bottom: 3px solid var(--accent);
+    display: flex; align-items: baseline; gap: 12px;
+  }
+  h2 .no { color: var(--accent); font-family: Consolas, monospace; font-size: 1.0rem; }
+  h3 { font-size: 1.13rem; font-weight: 700; margin: 26px 0 10px; }
+  h4 { font-size: 1.0rem; font-weight: 700; margin: 18px 0 8px; }
+  p { margin-bottom: 12px; }
+  strong { font-weight: 700; }
+  .muted { color: var(--muted); }
+  .err { color: var(--err); font-weight: 700; }
+  .warn { color: var(--warn); font-weight: 700; }
+  .ok { color: var(--accent2); font-weight: 700; }
+
+  .callout {
+    background: var(--bg2); border: 1px solid var(--rule);
+    border-left: 4px solid var(--accent);
+    padding: 14px 18px; border-radius: 6px; margin: 16px 0;
+  }
+  .callout.err { border-left-color: var(--err); }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.ok { border-left-color: var(--accent2); }
+  .callout .t { font-weight: 700; margin-bottom: 6px; }
+
+  .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin: 20px 0; }
+  .metric {
+    background: var(--bg2); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 14px 16px; text-align: center;
+  }
+  .metric .num { font-family: Consolas, monospace; font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+  .metric .lbl { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+
+  .table-wrap { overflow-x: auto; overflow-y: auto; max-height: 640px; margin: 14px 0; border: 1px solid var(--rule); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; min-width: 660px; background: var(--bg2); font-size: 0.9rem; }
+  thead th {
+    background: #eef1f7; font-weight: 700; text-align: left;
+    padding: 9px 13px; border-bottom: 2px solid var(--rule);
+    position: sticky; top: 0; z-index: 1; font-size: 0.86rem;
+  }
+  tbody td { padding: 8px 13px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  tbody tr:hover { background: #f4f7ff; }
+  td.mono, th.mono { font-family: Consolas, monospace; font-size: 0.82rem; }
+  code { font-family: Consolas, monospace; font-size: 0.83rem; background: #eef1f7; padding: 1px 5px; border-radius: 4px; }
+  pre {
+    font-family: Consolas, monospace; font-size: 0.83rem;
+    background: #1a2332; color: #d7e0f2;
+    padding: 12px 16px; border-radius: 8px; overflow-x: auto;
+    margin: 12px 0; line-height: 1.55;
+  }
+  ul, ol { margin: 8px 0 12px 22px; }
+  li { margin-bottom: 5px; }
+
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.76rem; font-weight: 700; }
+  .badge.fixed { background: #e3f5ec; color: #0e7a52; }
+  .badge.partial { background: #fef3e2; color: #b45309; }
+  .badge.open { background: #fde8e8; color: #b91c1c; }
+  .badge.p0 { background: #b91c1c; color: #fff; }
+  .badge.p1 { background: #f59e0b; color: #fff; }
+  .badge.p2 { background: #94a3b8; color: #fff; }
+
+  .fixbox {
+    background: #f0f4ff; border: 1px solid #cdd9f5; border-radius: 6px;
+    padding: 12px 16px; margin: 10px 0 16px;
+  }
+  .fixbox .t { font-weight: 700; color: var(--accent); font-size: 0.85rem; margin-bottom: 6px; }
+
+  footer { border-top: 1px solid var(--rule); margin-top: 50px; padding: 32px 0 56px; background: var(--bg2); }
+  @media (max-width: 640px) {
+    body { font-size: 14.5px; }
+    .container { padding: 0 16px; }
+    header.cover { padding: 40px 16px 32px; }
+    .metric-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media print {
+    header.cover { background: none; color: var(--ink); border-bottom: 3px solid var(--accent); }
+    header.cover .kicker, header.cover .sub, header.cover .meta { color: var(--muted); }
+    section { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<header class="cover">
+  <div class="container">
+    <div class="kicker">Engineering Repair Plan · 2026-08-15</div>
+    <h1>VCD 全面代码修复方案指导</h1>
+    <p class="sub">综合《全面代码审查与修复建议_2026-08-15.md》+《VCD 配音链路深度验证与分析报告》两份结论，对 <code>vcd-app/frontend/worker</code> 当前 HEAD 做全量逐行核验后出具的修复指导。含文档缺陷状态复核、新发现 P0 缺陷详解、分批部署方案与验证门。</p>
+    <div class="meta">核验基线：v1.11.34.x 系列（含 v1.12.0 P0-B1 审计回调）· 核验方式：三路并行逐行比对 + 关键点二次定点复核 · 语言方向：zh-CN → en-US（test.mp4）</div>
+  </div>
+</header>
+
+<div class="container">
+
+<!-- ============ 1. 执行摘要 ============ -->
+<section id="summary">
+  <h2><span class="no">01</span> 执行摘要</h2>
+
+  <div class="metric-grid">
+    <div class="metric"><div class="num">6 / 16</div><div class="lbl">文档缺陷已修复<br/>（v1.11.34 系）</div></div>
+    <div class="metric"><div class="num">3</div><div class="lbl">本次新发现<br/>P0 级缺陷</div></div>
+    <div class="metric"><div class="num">7</div><div class="lbl">P0 总计<br/>（含未修复遗留）</div></div>
+    <div class="metric"><div class="num">12</div><div class="lbl">P1 / P2 待修项</div></div>
+    <div class="metric"><div class="num">3 批</div><div class="lbl">部署批次<br/>（首批 7 处）</div></div>
+  </div>
+
+  <div class="callout ok">
+    <div class="t">好消息：并发限流主链已闭环，无需回滚</div>
+    <p>审查文档的 <strong>N1（双重占槽）、N3（内存近似放行）、S1（错误透传）、S2（并发 6→3）、S3（fail-closed）</strong> 已在 v1.11.34 全部落地并实测有效（task 2db01eb4 产出有声成品 64.92s / -1.0dBFS）。"删除 queue-workers 外层槽占用"等建议均已执行，<strong>不要再改动限流主链</strong>。残留风险只剩 <code>orchestrator.ts:215/295</code> 的 <code>temporarily unavailable</code> 匹配（无害死分支，建议清理防回归）。</p>
+  </div>
+
+  <div class="callout err">
+    <div class="t">三个 P0 必须立即修（直接违反"高效不浪费"约束）</div>
+    <p><strong>① 成功句记账双记 + 费用双计</strong>（P0-1）：v1.12.0 P0-B1 给 queue 主链补 <code>onApiCall</code> 后，<code>tts.ts:615-618</code> 成功回调与 <code>queue-workers.ts:411-418</code> 显式记账叠加——每个成功合成句产生 <strong>2 条 api_call_logs、2 次费用累加</strong>，任务 API 配额（500 次）提前一半触发，$5 日保险丝虚高。且 <code>tts.ts:613</code> 注释"无双记风险"已过时。</p>
+    <p><strong>② 进度无条件 UPDATE 回退</strong>（P0-2）：<code>queue-workers.ts:442</code> 写进度无单调守卫、无终态过滤，晚到 TTS 块可把已推进到 95/98 的进度打回 ~60——"60.5 → 58.25 两次倒退"的实锤路径。</p>
+    <p><strong>③ 克隆保底链仍被三道闸拦死</strong>（P0-3/P0-4/P0-5）：strategy0r 用<strong>原始段时长</strong>判定（1.9s &lt; 3s 直接 skip，未利用已存在的补长能力）；strategy4 的"多参考融合"实为<strong>单 url</strong>（CosyVoice 仅支持首段，其余 2 段提取成本白烧）；保底链无主路径的跨句合并补长。三者叠加 = 短句素材克隆 100% 失败 → 全片系统音色。</p>
+  </div>
+
+  <div class="callout warn">
+    <div class="t">修复顺序总原则</div>
+    <p>先修<strong>钱</strong>（P0-1 记账双计 → 保险丝/配额失真），再修<strong>进度</strong>（P0-2 回退 → 体验与重试安全），再修<strong>克隆保底</strong>（P0-3/4/5 → 声音不像本人），最后统一<strong>口径</strong>（P0-6 性别 null 门控、P0-7 语速 1.5 残留）。每项独立可验证，避免"大爆炸"重构。</p>
+  </div>
+</section>
+
+<!-- ============ 2. 缺陷状态全景 ============ -->
+<section id="status">
+  <h2><span class="no">02</span> 缺陷状态全景（文档 vs 当前代码）</h2>
+
+  <h3>2.1 审查文档所列缺陷的复核状态</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>编号</th><th>缺陷</th><th>核验结论</th><th>关键证据（当前 HEAD）</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">N1</td><td>全局 TTS 槽双重占用</td><td><span class="badge fixed">已修复</span></td><td class="mono">queue-workers.ts:18-20 外层 acquire 已删；仅 tts.ts:482 内层单点</td></tr>
+        <tr><td class="mono">N2</td><td>包装文本误分类 transient</td><td><span class="badge partial">部分修复</span></td><td class="mono">tts.ts 已透传真实错误；orchestrator.ts:215/295 匹配残留（死分支）</td></tr>
+        <tr><td class="mono">N3</td><td>内存近似限流槽满放行</td><td><span class="badge fixed">已修复</span></td><td class="mono">global-tts-limiter.ts:111-113 fail-closed</td></tr>
+        <tr><td class="mono">S1</td><td>错误包装掩盖真实原因</td><td><span class="badge fixed">已修复</span></td><td class="mono">tts.ts:649-654 透传 <code>[cosyvoice3]: ${真实message}</code></td></tr>
+        <tr><td class="mono">S2</td><td>全局并发 6 超容量</td><td><span class="badge fixed">已修复</span></td><td class="mono">global-tts-limiter.ts:28-31 = 3；等待 8s→30s</td></tr>
+        <tr><td class="mono">S3</td><td>排队超时 fail-open</td><td><span class="badge fixed">已修复</span></td><td class="mono">global-tts-limiter.ts:77-82 fail-closed + tts.ts:483-485 抛明确错误</td></tr>
+        <tr><td class="mono">S4</td><td>"计费成功却整句失败"断点</td><td><span class="badge fixed">已修复</span></td><td class="mono">根因 r2Bucket ReferenceError 已修（tts.ts:625-629 注释实证）；tts_sentence_failed 带 err=</td></tr>
+        <tr><td class="mono">S5</td><td>WAV dataSize 垃圾值</td><td><span class="badge fixed">完好</span></td><td class="mono">wav-utils.ts:117 Math.min 钳制；parseWavDurationMs 复用 parseWav 等价受保护</td></tr>
+        <tr><td class="mono">S6</td><td>克隆策略链无兜底</td><td><span class="badge partial">部分修复</span></td><td class="mono">strategy0r 已恢复（clone.ts:1402-1434）但 F1 时长 gate 仍在；预算门控已解除</td></tr>
+        <tr><td class="mono">S7</td><td>98% 进度 / 取消 / 记账</td><td><span class="badge partial">部分修复</span></td><td class="mono">取消同步已完整（queue-workers.ts:138-155 / pipeline-do.ts:945）；进度回退仍存在（P0-2）；记账引入双记（P0-1）</td></tr>
+        <tr><td class="mono">R1</td><td>性别落库缺口</td><td><span class="badge partial">部分修复</span></td><td class="mono">主链路已通；残留 null 门控（P0-6）+ 无回读校验（P1）</td></tr>
+        <tr><td class="mono">R2</td><td>单数据流出口</td><td><span class="badge fixed">已修复</span></td><td class="mono">stage-clone.ts:523 三源合并顺序正确，空 state 不覆盖 db</td></tr>
+        <tr><td class="mono">R7</td><td>进度写入收敛</td><td><span class="badge open">未修复</span></td><td class="mono">queue-workers.ts:442 无条件 UPDATE（P0-2）；utils.ts:95 重试路径无条件（P0-2b）</td></tr>
+        <tr><td class="mono">R8</td><td>降级语义统一</td><td><span class="badge partial">部分修复</span></td><td class="mono">qwen_system 收敛正确；quality_report 不记录克隆降级（P1）</td></tr>
+        <tr><td class="mono">R9</td><td>语速口径统一</td><td><span class="badge open">未修复</span></td><td class="mono">引擎 1.3 vs 上游 1.5 分裂（P0-7）；elastic MAX_SPEED 残留</td></tr>
+        <tr><td class="mono">F1</td><td>strategy0r 未利用补长</td><td><span class="badge open">未修复</span></td><td class="mono">ai/clone.ts:1410 原始段时长 gate（P0-3）</td></tr>
+        <tr><td class="mono">F2</td><td>strategy4 段提取失败</td><td><span class="badge partial">部分确认</span></td><td class="mono">audioUrl=vocal 签名 URL（24h 有效）；非 WAV 源无火山 Key 恒 null；CosyVoice 仅单 url（P0-4）</td></tr>
+        <tr><td class="mono">F3</td><td>双路径融合能力不对齐</td><td><span class="badge open">未修复</span></td><td class="mono">保底链用原始 ASR 段，无 buildExtendedCloneAsr 合并（P0-5）</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>2.2 全景结论</h3>
+  <ul>
+    <li><strong>已闭环（6 项）</strong>：N1 / N3 / S1 / S2 / S3 / S5 —— 并发限流主链与错误透传已是教科书级状态，与"5 分钟 CPU + 高效不浪费 API"约束对齐。</li>
+    <li><strong>仍存缺口（8 项）</strong>：R7 / R9 / F1 / F3（完全未动）+ S6 / S7 / R1 / R8 / F2（部分修复但有残留）—— 其中 5 项升级为本次 P0。</li>
+    <li><strong>新引入（2 项）</strong>：P0-1 记账双记（v1.12.0 P0-B1 引入）、P0-2 进度无条件写（早期遗留但生产实证）。</li>
+  </ul>
+</section>
+
+<!-- ============ 3. P0 缺陷详解 ============ -->
+<section id="p0">
+  <h2><span class="no">03</span> P0 缺陷详解与修复指引（首批部署）</h2>
+
+  <h3>P0-1 · 成功句记账双记 + 费用双计 <span class="badge p0">P0</span></h3>
+  <p><strong>位置：</strong><code>tts.ts:615-618</code>（成功回调）+ <code>queue-workers.ts:411-418</code>（显式记账）</p>
+  <p><strong>机制：</strong>v1.12.0 P0-B1 给 queue 主链补传 <code>onApiCall</code>（queue-workers.ts:293、L350），因此 tts.ts 成功路径 L615-618 触发一次 <code>logApiCall</code>（估算 0.0005 计费）；随后 queue-workers.ts:411-418 又显式 <code>logApiCall</code> 一次（按 <code>realCostUsd</code> 全额计费）——同一真实合成句 <strong>2 条日志 + 2 次费用累加</strong>；静音重合成成功路径更是 3 条。任务调用计数翻倍 → <code>MAX_API_CALLS_PER_TASK=500</code>（limits.ts:667）提前一半触发；<code>tts.ts:613</code> 注释"queue-workers 主链未传 onApiCall，无双记风险"已过时。</p>
+  <div class="fixbox">
+    <div class="t">修复指引（二选一，推荐 a）</div>
+    <pre>a. 删 queue-workers.ts:411-418 整块显式记账 — 保留 onApiCall 单点（L293/L350）；
+   同时将真实费用信息并入回调：tts.ts:615 回调 opts 增加
+   realCostUsd: (text.length) * getPriceTable(env).cosyvoicePerChar
+   （env 可从 options.env 取，与 queue-workers 原口径一致）。
+   → 成功句 1 条日志 + 1 次计费；CACHE_HIT 分支（L532-541 提前 return）天然不计费。
+b. 反向：删除 tts.ts:615-618 成功回调，仅保留 queue-workers 显式记账 —
+   但串行路径（tts.ts 直调方）将失去成功审计，不推荐。</pre>
+  </div>
+
+  <h3>P0-2 · 进度无条件 UPDATE 回退 <span class="badge p0">P0</span></h3>
+  <p><strong>位置：</strong><code>queue-workers.ts:442</code>；<code>pipeline/utils.ts:95</code>（重试路径）</p>
+  <p><strong>机制：</strong>TTS 块消费者写 <code>UPDATE tasks SET progress=? WHERE id=?</code>——<strong>无单调守卫、无终态过滤</strong>。聚合超时强制 failed + 30s 宽限后 merge 已推进，晚到写完的块（56-65 区间）把 95/98 打回 ~60.5/58.25。此外 <code>utils.ts:92-99</code>：任务一旦 <code>retry_count &gt; 0</code>，整个重试期走 <code>allowRegression=true</code> 无条件 UPDATE（双 isolate 并发可低值覆盖高值）。</p>
+  <div class="fixbox">
+    <div class="t">修复指引</div>
+    <pre>queue-workers.ts:442 改为：
+  UPDATE tasks SET progress = ?, updated_at = datetime('now')
+  WHERE id = ? AND progress &lt; ? AND status NOT IN ('done','failed','cancelled')
+  （bind rounded, taskId, rounded）— 与 utils.ts:98 单调守卫同款；
+utils.ts:95 重试路径补同样守卫（不再 allowRegression=true 直写，
+   仅在 retry 重置进度时由 pipeline-do.ts:557 显式归 0）。</pre>
+  </div>
+
+  <h3>P0-3 · strategy0r 用原始段时长 gate，未利用补长 <span class="badge p0">P0</span></h3>
+  <p><strong>位置：</strong><code>ai/clone.ts:1408-1410</code></p>
+  <p><strong>机制：</strong><code>seg0DurSec = (seg0.end - seg0.start) / 1000; if (seg0DurSec &gt;= 3)</code> —— 用原始 ASR 段时长判定，<strong>在调用 extractSeg 之前直接 skip</strong>。而 <code>extractAudioSegmentUniversal</code>（audio-dsp.ts:1530-1534）对 &lt;3s 片段会自动补长到 3s。1.9s 段本可补长后尝试 enrollment（1 次付费），判定逻辑与提取的补长能力脱节——生产任务 2db01eb4 的 3 个说话人正是死在此处。</p>
+  <div class="fixbox">
+    <div class="t">修复指引</div>
+    <pre>删除 `if (seg0DurSec >= 3)` 前置 gate，改为：
+  直接 extractSeg → 校验 wavBuffer 有效（byteLength > 1000 且非全静音）
+  → deepPurifyWav → uploadToR2 → _cloneRetry（enrollment 自身会校验时长）。
+  补长后仍不足 3s 的极端情况由 enrollment 侧拒绝，付费仍受
+  paidEnrollCount ≤ 2 封顶（clone.ts:1180-1184）控制，无预算风险。</pre>
+  </div>
+
+  <h3>P0-4 · strategy4 "多参考融合"名存实亡（单 url） <span class="badge p0">P0</span></h3>
+  <p><strong>位置：</strong><code>worker/clone.ts:82-91</code>；<code>ai/clone.ts:1446-1476</code></p>
+  <p><strong>机制：</strong>CosyVoice enrollment 仅支持 <strong>单个 url 字段</strong>（v1.8.86 注释：原 audio 数组多参考是 Qwen-TTS 特性），<code>selectedUrl = referenceAudioUrls[0]</code>。strategy4 仍提取 Top3 段（3 次 extractSeg + 3 次净化 + 3 次 R2 上传），但只有第 1 段被使用——<strong>其余 2 段提取成本白烧</strong>；且注释（clone.ts:1437-1438"多参考融合可将相似度从 0.89 提升到 0.92+"）与实际行为不符，误导后续维护。</p>
+  <div class="fixbox">
+    <div class="t">修复指引</div>
+    <pre>方案 1（推荐，省成本）：strategy4 改为"逐段单次 enrollment、取首个成功"——
+  按质量排序依次尝试，每段 1 次调用，成功即返回（paidEnrollCount≤2 封顶不变）；
+  删除"收集 Top3 URL 一次性融合"的无效提取（省 2/3 提取开销）。
+方案 2：若保留多参考意图，改为多次 enrollment 后选相似度最高结果（同方案1）。
+同时修正 clone.ts:1437-1438 / clone.ts:82-91 注释，删除"0.89→0.92+"夸大表述。</pre>
+  </div>
+
+  <h3>P0-5 · 保底链无跨句合并补长（双路径能力不对齐） <span class="badge p0">P0</span></h3>
+  <p><strong>位置：</strong><code>ai/clone.ts:1344-1350</code> vs <code>pipeline/stage-clone.ts:21-48 / 995</code></p>
+  <p><strong>机制：</strong>主路径具备完整融合能力（<code>buildExtendedCloneAsr</code> 短句合并 → <code>scoreAllSegments</code> 融合虚拟段 → <code>selectOptimalSegmentGroup</code> 智能合并 → <code>shouldMergeSegments</code> 拼接，总时长 ≥3s 即融合，v1.11.20）；而 <code>lastResortClone</code> 保底链直接用原始 ASR 段 <code>allSpeakerSegs</code>，<strong>无任何跨句合并</strong>。短句说话人在主路径失败后，保底链没有任何产生 ≥3s 参考的可能性。</p>
+  <div class="fixbox">
+    <div class="t">修复指引</div>
+    <pre>将 v1.11.20 融合门槛逻辑接入 lastResortClone：
+  ① 入口复用 buildExtendedCloneAsr（同主路径），生成合并后段列表；
+  ② 合并后总时长 ≥3s 的说话人，直接用合并段走 strategy0r（补长后判定，见 P0-3）；
+  ③ 融合判定与主路径共用同一函数（scoreAllSegments/shouldMergeSegments），
+     消除双路径能力差异（F3 闭环）。</pre>
+  </div>
+
+  <h3>P0-6 · 性别兜底被 null 门控挡死 <span class="badge p0">P0</span></h3>
+  <p><strong>位置：</strong><code>pipeline/stage-speaker.ts:312-354</code></p>
+  <p><strong>机制：</strong><code>if (unifiedResult)</code> 门控包住整段"localGenders 兜底 + 落库"逻辑。DeepSeek <strong>fetch 抛异常返回 null</strong>（非 HTTP 失败）时，<code>localGenders</code> 已计算出 F0/时长兜底性别，但既不写 <code>state.precomputedGenders</code> 也不落库——v1.11.22 的兜底在 fetch 异常路径完全失效，TTS 端 gender 缺失 → hash 50/50 或默认女声 → "男女声错乱"。</p>
+  <div class="fixbox">
+    <div class="t">修复指引</div>
+    <pre>① 门控改为：`if (unifiedResult || Object.keys(localGenders).length > 0)`
+   —— 兜底分支独立于 unifiedResult 存在；
+② 落库增加写入后回读校验（SELECT 比对），失败时 pipeline_events 记
+   speaker_genders_write_failed + err=（当前 catch 全吞错，无观测）；
+③ 顺带修 emotion.ts:611-619 本地关键词推断优先于 DeepSeek 的问题
+   （DeepSeek 返回正确性别会被本地误判覆盖）。</pre>
+  </div>
+
+  <h3>P0-7 · 语速口径分裂（引擎 1.3 vs 上游 1.5） <span class="badge p0">P0</span></h3>
+  <p><strong>位置：</strong><code>tts-engines.ts:193</code>（引擎钳 1.3）vs <code>tts.ts:1035/1040</code>（串行 1.5）vs <code>elastic-correction.ts:112</code>（MAX_SPEED 1.5）</p>
+  <p><strong>机制：</strong>引擎最终钳位 <code>MAX_RATE = 1.3</code>，而上游按 1.5 计算请求——预期加速被静默压回 1.3，残余偏差压给 merge 硬截断；<code>elastic-correction L2</code> 直调 DashScope rate=1.5 则<strong>绕过引擎钳位</strong>（最坏 ×1.73）。<code>elastic-correction.ts:714</code> 注释宣称与 0.85/1.15 一致，常量已改 0.7/1.5，注释过期。</p>
+  <div class="fixbox">
+    <div class="t">修复指引</div>
+    <pre>① tts.ts:1035/1040 上限 1.5 → 1.3；elastic-correction.ts:112 MAX_SPEED → 1.3；
+② 删除 elastic-correction.ts:714-719 过期注释，或同步为 0.7/1.3；
+③ ja 估算统一单一 mora 口径（tts-engines.ts:253 moraRate=6.5 为权威，
+   lang-rates.ts:97 safe=7.0 与 tts-engines.ts:225 注释 7.5 收敛到 6.5）。</pre>
+  </div>
+</section>
+
+<!-- ============ 4. P1/P2 清单 ============ -->
+<section id="p1p2">
+  <h2><span class="no">04</span> P1 / P2 缺陷清单与修复建议</h2>
+
+  <h3>4.1 P1（第二批，独立修复）</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>缺陷</th><th>位置</th><th>修复建议</th></tr></thead>
+      <tbody>
+        <tr><td>P1-1</td><td>缓存命中仍全额计费</td><td class="mono">queue-workers.ts:417</td><td>onApiCall 回调携带 <code>cacheHit</code> 标志，CACHE_HIT（tts.ts:532-541）不计费；引擎实际降级为 Qwen Flash 时按 qwen 单价而非 cosyvoice 单价记账</td></tr>
+        <tr><td>P1-2</td><td>克隆验证 TTS 绕全局闸门</td><td class="mono">ai/clone.ts:2674-2677</td><td>callQwenTTS 补传 <code>env</code>，纳入全局 3 槽限流（tts.ts:481 的 <code>if (options.env)</code> 分支才会 acquire）</td></tr>
+        <tr><td>P1-3</td><td>D1 写放大（限流轮询）</td><td class="mono">global-tts-limiter.ts:56-64</td><td>acquire 循环每 400ms 一次 DELETE+INSERT；改为"先查租约再按需写"或本地计数+批量刷，降低免费层 D1 额度消耗</td></tr>
+        <tr><td>P1-4</td><td>quality_report 不记录克隆降级</td><td class="mono">stage-merge.ts:1826-1828</td><td>增加 <code>cloneDegraded: 'enrollment_failed' | 'segment_too_short' | 'engine_418'</code> 字段，前端可区分"系统音色降级成品"</td></tr>
+        <tr><td>P1-5</td><td>FFmpeg 兜底只产 vocal 不产 bgm</td><td class="mono">stage-extract.ts:637-668</td><td>分离失败时：对完整音轨做简单"低频/人声带通"近似 bgm 或明确标记 <code>bgm_unavailable</code>（不再静默丢背景声）</td></tr>
+        <tr><td>P1-6</td><td>人声轨 &gt;50MB 跳过 BGM 混音</td><td class="mono">stage-merge.ts:1308-1309</td><td>分段混音或降低阈值前先降采样 bgm，避免长视频静默丢 BGM</td></tr>
+        <tr><td>P1-7</td><td>WSOLA NaN ratio 可穿透</td><td class="mono">elastic-correction.ts:718-723 / engine-utils.ts:934</td><td>入口加 <code>Number.isFinite(ratio) && ratio > 0</code> 校验（NaN 比较恒 false 不拒绝）</td></tr>
+        <tr><td>P1-8</td><td>checkpoint 注释与实现不符</td><td class="mono">pipeline-do.ts:975-981</td><td>恢复路径补 <code>tasks.bgm_flac_r2_key</code> 兜底读取（注释声称有但代码只读 checkpoint），旧检查点恢复不丢 BGM</td></tr>
+        <tr><td>P1-9</td><td>computeSegmentScore 阈值漂移</td><td class="mono">voice-enrollment-service.ts:446-453</td><td>65/40/18 → 55/38/22，与 scoreSegment（clone.ts:592-599）对齐，消除预排序与克隆候选不同级</td></tr>
+        <tr><td>P1-10</td><td>deepPurifyWav 净化后无静音验证</td><td class="mono">audio-dsp.ts:2500-2617</td><td>谱减（alpha=2.0）后补 RMS/能量检查，静音参考拒绝并记事件（当前仅 byteLength&gt;1000 判定）</td></tr>
+        <tr><td>P1-11</td><td>克隆失败用户文案不透传原因</td><td class="mono">orchestrator.ts:1059-1061</td><td>error_message 追加 pipeline_events 最近一条 clone 错误摘要（err= 已落库，取回拼装）</td></tr>
+        <tr><td>P1-12</td><td>排队深度 30s 超时临界</td><td class="mono">queue-workers.ts:93,172 + limiter:38</td><td>8 in-flight 争 3 槽最坏 ~32s &gt; 30s 窗口；等待提到 40s 或块内并发 4→3</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>4.2 P2（第三批，防御与清理）</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>缺陷</th><th>位置</th><th>修复建议</th></tr></thead>
+      <tbody>
+        <tr><td>P2-1</td><td>memoryAcquireApprox 同 ms 键碰撞</td><td class="mono">global-tts-limiter.ts:100-113</td><td>键改为 <code>Date.now() + 自增序号</code></td></tr>
+        <tr><td>P2-2</td><td>TokenBucket.acquire 无超时</td><td class="mono">utils/http.ts:139-152</td><td>加最长等待上限，防未来桶容量下调后无界等待</td></tr>
+        <tr><td>P2-3</td><td>TM 缓存译文优先新译文</td><td class="mono">stage-translate.ts:1583-1584</td><td>本次 DeepSeek 新译文优先，TM 仅作失败兜底；或按 source_fingerprint 版本化</td></tr>
+        <tr><td>P2-4</td><td>base64 data URL 无尺寸守卫</td><td class="mono">tts.ts:638</td><td>大音频改走 R2 直传（&gt;8MB 时禁止 data URL 分支）</td></tr>
+        <tr><td>P2-5</td><td>wrangler DLQ 死配置</td><td class="mono">wrangler.jsonc:116-133</td><td>删除 scene/turn/sentence 已删生产者的 DLQ 消费者；L165 LOG_LEVEL 注释与配置对齐</td></tr>
+        <tr><td>P2-6</td><td>estimateSNR 静音段虚高</td><td class="mono">audio-dsp.ts:260</td><td>silenceEnergy&lt;0.001 时返回 0 而非 30（全静音段 SNR 虚高）</td></tr>
+        <tr><td>P2-7</td><td>融合虚拟段含他人语音</td><td class="mono">clone.ts:664-666</td><td>虚拟段切分时校验中间帧 speaker 标签，非目标说话人段剔除</td></tr>
+        <tr><td>P2-8</td><td>注释与逻辑不符（6 处）</td><td class="mono">clone.ts:583/1387 · tts.ts:613 · elastic:714 · pipeline-do:977 · wrangler:165 · stage-merge:1571</td><td>统一修订；stage-merge.ts:1571 lamejs OOM 无恢复路径（v1.10.51 TODO）补降级</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ 5. 分批部署 ============ -->
+<section id="deploy">
+  <h2><span class="no">05</span> 分批部署计划</h2>
+
+  <h3>第一批（1 次部署，7 处小改动，影响面最小）</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>改动</th><th>文件:行</th><th>预计行数</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>P0-1 删 queue 显式记账，费用并入 onApiCall 回调</td><td class="mono">queue-workers.ts:411-418 · tts.ts:615-618</td><td>~10</td></tr>
+        <tr><td>2</td><td>P0-2 进度 UPDATE 加单调守卫 + 终态过滤（两处）</td><td class="mono">queue-workers.ts:442 · utils.ts:95</td><td>~4</td></tr>
+        <tr><td>3</td><td>P0-3 strategy0r 去掉原始时长 gate，提取后判定</td><td class="mono">ai/clone.ts:1408-1410</td><td>~6</td></tr>
+        <tr><td>4</td><td>P0-4 strategy4 改逐段单次 enrollment，删无效 Top3 融合</td><td class="mono">ai/clone.ts:1446-1476</td><td>~15</td></tr>
+        <tr><td>5</td><td>P0-5 保底链接入 buildExtendedCloneAsr 合并</td><td class="mono">ai/clone.ts:1344-1350</td><td>~12</td></tr>
+        <tr><td>6</td><td>P0-6 性别兜底移出 null 门控 + 回读校验</td><td class="mono">stage-speaker.ts:312-354</td><td>~10</td></tr>
+        <tr><td>7</td><td>P0-7 语速三处统一 1.3 + ja 口径收敛</td><td class="mono">tts.ts:1035/1040 · elastic:112</td><td>~4</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>第二批（独立修复，可并行）</h3>
+  <ul>
+    <li>P1 全部 12 项（4.1 表），每项独立可验证。</li>
+  </ul>
+
+  <h3>第三批（防御与清理）</h3>
+  <ul>
+    <li>P2 全部 8 项（4.2 表）+ orchestrator.ts:215/295 <code>temporarily unavailable</code> 残留匹配清理 + tts.ts:613 过期注释修订。</li>
+  </ul>
+
+  <div class="callout warn">
+    <div class="t">红线提醒（防止回归）</div>
+    <p>① 不再改动 <code>global-tts-limiter.ts</code> 的 3 槽 / 30s / fail-closed 语义（已实测有效）；② 不再恢复任何形式的外层占槽；③ 克隆付费次数仍受 <code>paidEnrollCount ≤ 2</code> 封顶约束；④ 所有改动必须走既有事件表与价格表，不新增表/绑定。</p>
+  </div>
+</section>
+
+<!-- ============ 6. 验证方案 ============ -->
+<section id="verify">
+  <h2><span class="no">06</span> 验证方案（重跑 test.mp4，成本受控）</h2>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>验证维度</th><th>观测点</th><th>通过标准</th></tr></thead>
+      <tbody>
+        <tr><td>计费正确性</td><td>api_call_logs 中 <code>tts ok</code> 行数</td><td>成功行 ≈ 实际合成句数（无双记）；429 计数归零；cost_audit_log qwen 计费条数 ≈ 句子数（无重试放大）</td></tr>
+        <tr><td>进度单调</td><td>任务详情 progress 时间线</td><td>全程单调递增，无 60.5→58.25 式倒退</td></tr>
+        <tr><td>克隆保底</td><td>pipeline_events 的 strategy0r / strategy4 事件</td><td>短句素材（&lt;3s）也能看到 <code>strategy0r</code> 提取尝试（不再直接 skipped）；enrollment 失败有具体 err=</td></tr>
+        <tr><td>性别落库</td><td>tasks.speaker_genders</td><td>非空；与 DeepSeek 结果一致（回读校验事件为 0）</td></tr>
+        <tr><td>语速口径</td><td>elastic-correction 日志 rate 值</td><td>所有请求 rate ≤ 1.3，无绕过钳位的 1.5 直调</td></tr>
+        <tr><td>成品</td><td>dubbed_audio.wav</td><td>全部段 peak &gt; -60dBFS（非静音）；时长对齐目标 ±2%</td></tr>
+        <tr><td>成本门</td><td>本次重跑 vs 前两次</td><td>成本低于 45686830 / 54980acf 两次重跑（消除双计 + 429 重试）</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout ok">
+    <div class="t">克隆验证素材建议</div>
+    <p>test.mp4 说话人片段物理上限 1.9s（素材特性），即使 P0-3/4/5 修复后保底链可以尝试补长 enrollment，<strong>克隆质量验证仍建议换用 BYD 日语.mp4</strong>（句子 5-15s），用于验证主路径 ABCD 评分与 A/B 级克隆可达性（80/10/10 目标的前提是素材句长 ≥3s + CosyVoice 合成可用）。</p>
+  </div>
+</section>
+
+<!-- ============ 7. 兼容性说明 ============ -->
+<section id="compat">
+  <h2><span class="no">07</span> 与既有机制的兼容性说明</h2>
+  <ul>
+    <li><strong>P0-1 与 v1.12.0 P0-B1</strong>：不删审计意图，只去重——回调单点保留，queue 侧删显式重复记账。</li>
+    <li><strong>P0-2 与 v1.10.42 幂等状态行</strong>：单调守卫只挡低值覆盖，不影响 R2 partial 恢复与重投语义。</li>
+    <li><strong>P0-3/4/5 与 v1.10.60 paidEnrollCount 封顶 / v1.11.34 S6</strong>：补长尝试仍受 ≤2 次付费封顶，不新增预算风险。</li>
+    <li><strong>P0-6 与 v1.11.22 localGenders</strong>：是恢复该补丁在 fetch 异常路径的应有行为，非新增逻辑。</li>
+    <li><strong>P0-7 与 v1.11.29 MAX_RATE 统一</strong>：完成该版本声明"全路径统一"但遗漏的 1.5 残留。</li>
+    <li><strong>与 v1.10.70 令牌桶</strong>：全局 3 槽仍为第一道闸，令牌桶 6/isolate 为第二道，改动不触碰。</li>
+  </ul>
+</section>
+
+</div>
+
+<footer>
+  <div class="container">
+    <p class="muted" style="font-size:0.85rem;">
+      本方案依据《全面代码审查与修复建议_2026-08-15.md》《VCD 配音链路深度验证与分析报告》（vcd-tts-chain-analysis-2026-08-15）及本次对 vcd-app/frontend/worker 当前 HEAD 的三路并行逐行核验（关键结论已二次定点复核）出具。所有行号均来自核验时文件实际内容。
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>
