@@ -5,6 +5,12 @@
 *.dev.vars
 .dev.vars*
 
+# ============ v1.12.04f (P1-S① 安全加固): data/ 目录 ============
+#   含生产密钥 (data/.env.dev 8 个密钥 + 监控脚本硬编码 Token) 与调试产物。
+#   当前 git 根在 vcd-app/, data/ 在外层暂不被跟踪; 此处双保险 —
+#   仓库根提升到 VCD/ 时 data/ 立即被忽略, 防 git add 全量泄露。
+data/
+
 # ============ 依赖与构建产物 ============
 node_modules/
 .next/

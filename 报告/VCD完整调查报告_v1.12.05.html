@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VCD 视频配音翻译 Pipeline 完整调查报告</title>
+<style>
+  :root {
+    --bg: #0f1420;
+    --panel: #171e2e;
+    --panel2: #1d2740;
+    --border: #2a3550;
+    --text: #e6ebf5;
+    --muted: #93a0b8;
+    --accent: #4f8cff;
+    --accent2: #38d9a9;
+    --warn: #ffb454;
+    --danger: #ff6b6b;
+    --ok: #38d9a9;
+    --code-bg: #0b0f1a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    line-height: 1.75;
+    padding: 0 0 80px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+  header.hero {
+    background: linear-gradient(135deg, #1a2a4a 0%, #0f1420 60%, #0a1a2e 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 56px 0 40px;
+    margin-bottom: 40px;
+  }
+  .hero-inner { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+  .tag {
+    display: inline-block; background: rgba(79,140,255,.15); color: var(--accent);
+    border: 1px solid rgba(79,140,255,.4); border-radius: 999px; padding: 2px 14px;
+    font-size: 12px; letter-spacing: .5px; margin-bottom: 16px;
+  }
+  h1 { font-size: 30px; font-weight: 700; letter-spacing: .5px; margin-bottom: 10px; }
+  .sub { color: var(--muted); font-size: 15px; }
+  .meta { margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+  .meta b { color: var(--text); font-weight: 600; }
+
+  h2 {
+    font-size: 22px; font-weight: 700; margin: 48px 0 18px; padding-bottom: 10px;
+    border-bottom: 2px solid var(--border); color: #fff;
+  }
+  h2 .num {
+    display: inline-block; background: var(--accent); color: #fff; border-radius: 6px;
+    width: 30px; height: 30px; line-height: 30px; text-align: center; font-size: 15px;
+    margin-right: 12px; vertical-align: 2px;
+  }
+  h3 { font-size: 17px; font-weight: 600; margin: 28px 0 12px; color: var(--accent2); }
+  h4 { font-size: 15px; font-weight: 600; margin: 20px 0 8px; color: #fff; }
+  p { margin: 10px 0; color: var(--text); }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px 22px; margin: 16px 0;
+  }
+  .verdict {
+    display: flex; align-items: center; gap: 10px; border-radius: 10px;
+    padding: 12px 16px; margin: 14px 0; font-weight: 600; font-size: 15px;
+  }
+  .verdict.ok { background: rgba(56,217,169,.1); border: 1px solid rgba(56,217,169,.4); color: var(--ok); }
+  .verdict.warn { background: rgba(255,180,84,.1); border: 1px solid rgba(255,180,84,.4); color: var(--warn); }
+  .verdict.bad { background: rgba(255,107,107,.1); border: 1px solid rgba(255,107,107,.4); color: var(--danger); }
+  .verdict.info { background: rgba(79,140,255,.1); border: 1px solid rgba(79,140,255,.4); color: var(--accent); }
+
+  code {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px;
+    padding: 1px 6px; font-family: "Cascadia Code", Consolas, monospace; font-size: 12.5px; color: #9ecbff;
+  }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto; margin: 12px 0; font-size: 12.5px; line-height: 1.6;
+  }
+  pre code { background: none; border: none; padding: 0; color: #c9d6ea; }
+
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  th { background: var(--panel2); color: #fff; text-align: left; padding: 10px 12px; font-weight: 600; border: 1px solid var(--border); }
+  td { padding: 9px 12px; border: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: rgba(255,255,255,.02); }
+
+  .pill { display: inline-block; border-radius: 999px; padding: 1px 10px; font-size: 12px; font-weight: 600; }
+  .pill.p0 { background: rgba(255,107,107,.15); color: var(--danger); border: 1px solid rgba(255,107,107,.4); }
+  .pill.p1 { background: rgba(255,180,84,.15); color: var(--warn); border: 1px solid rgba(255,180,84,.4); }
+  .pill.p2 { background: rgba(79,140,255,.15); color: var(--accent); border: 1px solid rgba(79,140,255,.4); }
+
+  .toc { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 22px 26px; }
+  .toc ol { margin-left: 20px; }
+  .toc li { margin: 6px 0; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  .flow { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  .flow .step {
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 12px; font-size: 13px;
+  }
+  .flow .arrow { color: var(--muted); align-self: center; }
+
+  .root-cause { border-left: 3px solid var(--danger); padding: 4px 0 4px 16px; margin: 12px 0; }
+  .root-cause .title { color: var(--danger); font-weight: 700; }
+
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 16px 0; }
+  .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+  .stat .v { font-size: 26px; font-weight: 700; color: var(--accent); }
+  .stat .l { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+  footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+  .highlight { background: rgba(79,140,255,.12); border-radius: 4px; padding: 0 4px; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <span class="tag">只读调查 · 未修改任何代码</span>
+    <h1>VCD 视频配音翻译 Pipeline 完整调查报告</h1>
+    <p class="sub">火山引擎分离 · Qwen-ASR · DeepSeek 翻译/情感 · CosyVoice 克隆 · 前端合成 —— 全链路根因调查</p>
+    <div class="meta">
+      <span>报告日期：<b>2026-08-18</b></span>
+      <span>基线版本：<b>v1.12.05</b></span>
+      <span>调查方式：<b>代码审计 + D1 生产库实证</b></span>
+      <span>代码改动：<b>0</b></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <h3 style="margin-top:0">目录</h3>
+  <ol>
+    <li><a href="#s1">执行摘要</a></li>
+    <li><a href="#s2">总体架构评估（对照上传流程图）</a></li>
+    <li><a href="#s3">人声/背景音分离（火山引擎）</a></li>
+    <li><a href="#s4">背景音是否保留到最后合成</a></li>
+    <li><a href="#s5">音视频合成在哪里进行</a></li>
+    <li><a href="#s6">字幕/时间轴/说话人分离</a></li>
+    <li><a href="#s7">F0 性别区分 + DeepSeek 兜底</a></li>
+    <li><a href="#s8">情感来源与传递</a></li>
+    <li><a href="#s9">克隆引擎（CosyVoice）与质量</a></li>
+    <li><a href="#s10">DeepSeek 调用次数</a></li>
+    <li><a href="#s11">翻译规则与校对</a></li>
+    <li><a href="#s12">SRT 上传 vs 无 SRT</a></li>
+    <li><a href="#s13">三个人工校对环节设计</a></li>
+    <li><a href="#s14">10% / 55% / 72% 卡顿根因</a></li>
+    <li><a href="#s15">前端进度词来源</a></li>
+    <li><a href="#s16">"全员集合"任务问题实证</a></li>
+    <li><a href="#s17">根因汇总与优先级</a></li>
+    <li><a href="#s18">机制级优化建议</a></li>
+    <li><a href="#s19">结论</a></li>
+    <li><a href="#s20">Cloudflare 存储清理机制审计（R2 2G 管控）</a></li>
+    <li><a href="#s21">Cloudflare Containers 引入评估（成本控制）</a></li>
+    <li><a href="#s22">网站安全审计与加固方案</a></li>
+  </ol>
+</div>
+
+<h2 id="s1"><span class="num">1</span>执行摘要</h2>
+
+<div class="summary-grid">
+  <div class="stat"><div class="v">4</div><div class="l">DeepSeek 调用点（典型 65s 任务实测）</div></div>
+  <div class="stat"><div class="v">3</div><div class="l">机制级代码缺陷（取行 bug / 恒 true 判断 / F0 假覆盖）</div></div>
+  <div class="stat"><div class="v">2</div><div class="l">测试回归点（05a→05b 全女声 / 分离超时）</div></div>
+  <div class="stat"><div class="v">0</div><div class="l">本次代码改动</div></div>
+</div>
+
+<div class="verdict info">补充审计（2026-08-18 追加）：本报告 §20-§22 新增三个整体修复依据 —— ① Cloudflare 存储清理机制审计（R2 已达 2G，需控制免费额度 90% 内）；② Cloudflare Containers 引入评估（$5 计划内含 375 vCPU-min，可零成本承载 ffmpeg 母带处理）；③ 网站安全审计（3 个 P0 高危 + 6 个 P1 风险）。详见文末。</div>
+
+<p>本次调查对 VCD 配音 pipeline 进行了全链路代码审计（6 个并行调查代理覆盖 20+ 核心文件）与 D1 生产库实证（任务 6a69e28f 及 sintel 系列测试任务）。核心结论：<b>主链路（分离→ASR→翻译→TTS→混音→前端合成）整体通畅，但存在 3 个机制级代码缺陷和若干链路缺口</b>，它们共同造成了用户观察到的"全员集合说出中文、译文混源语言、全女声无男声、衔接生硬、无背景音乐"等问题。</p>
+
+<p>三个最关键的机制级缺陷：</p>
+<div class="card">
+  <div class="root-cause">
+    <div class="title">缺陷 A · 语言对翻译策略被取行 bug 丢弃（stage-translate.ts:1288-1289）</div>
+    <p class="small">unified 主路径用 <code>.slice(1,2)</code> 从 <code>buildLocalizationPrompt</code> 取行，只拿到"配音要求"行，28 个语言对策略 + 14 个目标语言策略全部失效。zh→ja 的"读音保真"规则（译文必须含假名，严禁纯汉字句）因此未注入 → <b>"全員、集合！"纯汉字 → TTS 按中文发音</b>。</p>
+  </div>
+  <div class="root-cause">
+    <div class="title">缺陷 B · SRT 说话人判断恒为 true（stage-asr.ts:287-310）</div>
+    <p class="small">SRT 解析后 <code>speaker_id</code> 先被硬编码为 <code>'spk_0'</code>（truthy），随后 <code>srtHasSpeakers</code> 判断恒为 true → <b>diarization-only ASR 永不调用</b>，上传 SRT 的任务永远单说话人。</p>
+  </div>
+  <div class="root-cause">
+    <div class="title">缺陷 C · F0 性别"覆盖 DeepSeek"是假象（stage-speaker.ts:348-454）</div>
+    <p class="small">注释声称 F0 直判覆盖 DeepSeek，但 <code>persistGenders</code> 键级合并只补缺失（DeepSeek 先落库），<b>F0 实际只"填空"不"覆盖"</b>；且 F0 依赖声学提取成功（16/24-bit WAV + YIN ≥2 帧 + 句长 ≥2s），任一不满足即静默跳过 → 落入"时长兜底"（<code>dur≥8s?male:female</code>）→ <b>短句碎片恒判女声</b>。</p>
+  </div>
+</div>
+
+<p>此外，测试数据揭示了两个关键实证：<b>① 任务 6a69e28f（CN→JP test.mp4）火山分离 API 轮询超时（300s/85 次）→ 无人声无 BGM → 克隆降级 qwen_system → 全部句子用系统音色 + 纯汉字译文按中文发音</b>；<b>② sintel 系列 05a→05b 之间出现性别检测回归（05a 正确识别男女，05b-05d 全部判为女声）</b>。</p>
+
+<h2 id="s2"><span class="num">2</span>总体架构评估（对照上传流程图）</h2>
+
+<p>上传的流程图（pipeline 核心流程）与代码实现<b>总体吻合</b>，但存在 4 处实现与设计不符：</p>
+
+<table>
+  <tbody><tr><th>流程图设计</th><th>代码实现</th><th>差异</th></tr>
+  <tr><td>IndexTTS-2.5 / CosyVoice / Qwen 三引擎聚合</td><td>仅 CosyVoice v3.5-flash enrollment 单引擎（clone.ts:637 硬编码），Qwen Flash 仅作兜底</td><td><span class="pill p1">P1</span> 无多引擎切换架构预留</td></tr>
+  <tr><td>F0 识别不清 → DeepSeek 辅助</td><td>F0 与 DeepSeek 并行，F0 只填空不覆盖；F0 失败时落入"时长兜底"而非 DeepSeek</td><td><span class="pill p0">P0</span> 性别链路与设计不符</td></tr>
+  <tr><td>情感标记 → TTS 情感参数</td><td>情感确实传入 TTS（instruction + volume + SSML），但 ASR 自带情感是死数据，TTS 情感 100% 依赖 DeepSeek</td><td><span class="pill p1">P1</span> ASR 情感未消费</td></tr>
+  <tr><td>人工字幕校对（优先 SRT 时跳过 ASR）</td><td>SRT 跳过 ASR 正确，但 SRT 任务同时跳过 unified 分析 + F0 → 角色/性别/情感系统性缺失</td><td><span class="pill p0">P0</span> SRT 配音维度降级</td></tr>
+</tbody></table>
+
+<div class="verdict warn">总体：架构设计优秀（分层清晰、人机协同、多模型兜底），但"设计意图 → 代码实现"之间存在多处静默偏差，是本轮所有问题的总根源。</div>
+
+<h2 id="s3"><span class="num">3</span>人声/背景音分离（火山引擎）</h2>
+
+<div class="verdict ok">结论：使用火山引擎 MediaKit <code>separate-voice</code> API，单次调用返回人声 + 伴奏双轨，链路正常。</div>
+
+<p>分离调用链：<code>stage-extract.ts:616</code> → <code>volcengineSeparateVoice(audioUrl, key, timeout, env, undefined, true, costMeta)</code>（第 6 参 <code>true</code> = 请求伴奏轨）→ <code>ai/volcengine.ts:511</code> <code>volcengineSubmitAndPoll('separate-voice', ...)</code>。</p>
+
+<p>双轨产物 R2 key：</p>
+<pre><code>人声：audio/{taskId}/voice.wav
+伴奏：audio/{taskId}/bgm.wav
+缓存：cache/vocalsep/{hash}.voice.wav + .bgm.wav</code></pre>
+
+<p>降级链（与旧文档不同）：</p>
+<div class="flow">
+  <span class="step">separate-voice 直接分离</span><span class="arrow">→</span>
+  <span class="step">失败重试 1 次</span><span class="arrow">→</span>
+  <span class="step">轮询超时标记降级</span><span class="arrow">→</span>
+  <span class="step">FFmpeg WASM 兜底（v1.11.99c 已移除）</span><span class="arrow">→</span>
+  <span class="step">克隆走降级链 / BGM 缺失</span>
+</div>
+
+<div class="card">
+  <h4>实测异常（任务 6a69e28f，CN→JP test.mp4）</h4>
+  <pre><code>extract_audio / volc_poll_timeout:
+  task=amk-tool-separate-voice-751498035458 轮询超时 300000ms (85次), 返回 null 交上层降级
+extract_audio / vocal_sep_no_ffmpeg:
+  分离未产出 vocal (sepErr=N/A), 跳过 FFmpeg 兜底, 克隆走降级链</code></pre>
+  <p class="small">该任务 <code>vocal_flac_r2_key</code> 与 <code>bgm_flac_r2_key</code> 均为 null → 无 BGM、克隆降级。这是"没有背景音乐"的直接根因（本次任务）。</p>
+</div>
+
+<h2 id="s4"><span class="num">4</span>背景音是否保留到最后合成</h2>
+
+<div class="verdict warn">结论：正常路径下 BGM 会被保留并混入最终 <code>dubbed_audio.wav</code>；但存在多条"静默跳过 BGM 混音"的守卫路径，任一命中即成片无背景音。</div>
+
+<p>混音真实存在（stage-merge.ts）：</p>
+<pre><code>L1354  入口守卫: if (state.bgmR2Key)
+L1497  读取 BGM: env.MEDIA_BUCKET.get(state.bgmR2Key)
+L1571  实际混音: mixPcmWithDucking(voiceBufferForMix, bgmBuffer, duckingOptions)
+L1581  覆盖写回 dubbed_audio.wav</code></pre>
+
+<p>BGM 混音被跳过的守卫路径（任一命中 → 无背景音）：</p>
+<table>
+  <tbody><tr><th>守卫</th><th>后果</th></tr>
+  <tr><td><code>bgmR2Key</code> 为空（分离 API 未返回伴奏 URL / 下载失败）</td><td>跳过混音</td></tr>
+  <tr><td>人声轨 &gt;50MB</td><td>跳过后端混音，保留纯人声 + 独立 BGM 轨（前端可合成）</td></tr>
+  <tr><td>BGM R2 对象不存在</td><td>跳过混音</td></tr>
+  <tr><td><code>mixPcmWithDucking</code> 返回 null（位深/解析失败）</td><td>跳过混音</td></tr>
+  <tr><td>BGM 非 RIFF（AAC）→ 强制转码失败</td><td>混音失败</td></tr>
+</tbody></table>
+
+<div class="card">
+  <h4>历史根因（代码注释实证）</h4>
+  <ul>
+    <li><b>v1.11.99d（P0）</b>：<code>ensureWavTrack</code> 里 <code>parseVolcengineApiKey(env)</code> 传参错误（误传整个 env 对象）→ <code>trim()</code> TypeError → BGM 恒 AAC → merge 解析失败 → 成片无背景音（已修）。</li>
+    <li><b>v1.10.82</b>：<code>ON CONFLICT(task_id, code)</code> 子句恒抛错 → <code>bgm_track</code> 产物从未落库（已修）。</li>
+    <li><b>v1.10.64 F11</b>：DO 重启后 <code>bgmR2Key</code> 丢失 → 已通过 tasks 表恢复修复。</li>
+  </ul>
+</div>
+
+<p>实测：sintel 05a（8fc75d11）BGM 混音成功（<code>bgm_mixed_ok: voice=4984844B bgm=8810906B mixed=4984844B</code>）；任务 6a69e28f 因分离超时无 BGM。</p>
+
+<h2 id="s5"><span class="num">5</span>音视频合成在哪里进行</h2>
+
+<div class="verdict info">结论：Worker 端不产出真实 MP4。<code>dubbed_audio.wav</code> 是纯音频 WAV；最终 MP4 由前端在用户点击下载时用浏览器 FFmpeg.wasm 实时合成。</div>
+
+<p>证据：</p>
+<ul>
+  <li><code>ffmpeg-wasm-integration.ts:141-153</code>：<code>burnSubtitles</code> 是<b>恒空 stub</b>（"FFmpeg 硬烧录已禁用 (DO 内存保护), 视频由前端合成"）。</li>
+  <li><code>stage-merge.ts:2059-2067</code>：软 mux 已禁用（CF Workers 运行时无 DOM/Worker 构造器，FFmpeg.wasm 0.12 API 必然 "Worker is not defined"）。</li>
+  <li><code>muxDubbedVideo</code> / <code>extractAudio</code> 已定义但全库零调用（死代码）。</li>
+  <li>前端 <code>client.tsx:1926-2033</code>：下载时浏览器合成 —— 音频 <code>synthesizeDubbedAudio()</code>（含 BGM 混音），视频 <code>-c:v copy -c:a aac</code> 秒级 remux。</li>
+</ul>
+
+<div class="verdict ok">这是正确的架构决策：视频封装完全委托浏览器按需合成，不消耗 Cloudflare CPU 配额（符合"5 分钟 CPU"约束）。</div>
+
+<h2 id="s6"><span class="num">6</span>字幕/时间轴/说话人分离</h2>
+
+<div class="verdict ok">结论：ASR 使用 <code>qwen-audio-3.0-asr-flash-filetrans</code>，开启说话人分离 + 情感识别，输出 speaker_id + 字幕 + 毫秒时间轴，链路正常。</div>
+
+<pre><code>asr.ts:65-73   parameters = { diarization_enabled: true, emotion_recognition_enabled: true, ... }
+asr.ts:111     model: 'qwen-audio-3.0-asr-flash-filetrans'
+asr.ts:184     提取 emotion 字段（但下游无人消费 —— 见 §8）</code></pre>
+
+<p>说话人分离在 ASR 阶段完成（<code>callQwenASRDiarizationOnly</code>），<code>speaker_diarize</code> 步骤做统计 + 两路 DeepSeek + 本地评分。上传 SRT 时：</p>
+<ul>
+  <li>SRT 输入路径：<b>跳过 ASR 文字识别</b>，直接用上传字幕和时间轴（stage-asr.ts:258）。</li>
+  <li>SRT 增强路径（video+SRT）：SRT 文本/时间戳绝对优先，仅从 ASR 取 speaker_id。</li>
+</ul>
+
+<div class="card">
+  <h4>机制级缺陷 B（SRT 说话人恒单说话人）</h4>
+  <pre><code>stage-asr.ts:287-310
+  speaker_id: 'spk_0',          // ← 先硬编码 truthy 值
+  ...
+  const srtHasSpeakers = sentences.filter(s =&gt; s.speaker_id).length / len &gt; 0.3;
+  // ↑ 因 speaker_id 已赋值 'spk_0'，比值恒 1.0 → 恒 true
+  if (audioUrl &amp;&amp; !srtHasSpeakers) {  // ← 永不进入
+    callQwenASRDiarizationOnly(...)   // ← 永不调用
+  }</code></pre>
+  <p class="small">设计意图"SRT 无说话人标记时用音频补说话人"完全失效。且 <code>parseSRT</code> 不解析 <code>&lt;i&gt;Speaker1&lt;/i&gt;</code> / <code>{spk_0}</code> 标记，标记会作为文本进入翻译。</p>
+</div>
+
+<h2 id="s7"><span class="num">7</span>F0 性别区分 + DeepSeek 兜底</h2>
+
+<div class="verdict warn">结论：F0 声学分析确实存在（male&lt;155Hz / female≥175Hz，灰区 155-175Hz 交 DeepSeek），但存在 3 个机制缺口，导致实际效果与设计不符。</div>
+
+<p>两阶段判断逻辑（stage-speaker.ts:326-400）：</p>
+<pre><code>// F0 直判（仅 ≥2s 句）
+if (meanF0 &lt; 155) out[spk] = 'male';
+else if (meanF0 &gt;= 175) out[spk] = 'female';
+else grayZoneSpks.add(spk);          // 155-175Hz 灰区 → 交 DeepSeek
+
+// 时长兜底（F0 无数据时）
+out[spk] = dur &gt;= 8000 ? 'male' : 'female';   // ← 短句碎片恒判女声</code></pre>
+
+<div class="card">
+  <h4>三个机制缺口</h4>
+  <div class="root-cause">
+    <div class="title">缺口 1 · F0"覆盖"DeepSeek 是假象</div>
+    <p class="small">stage-speaker.ts:348-351 注释声称"F0 明确区间直判覆盖 DeepSeek 语义"，但落库顺序是 DeepSeek 先（L488）、local 后（L495），且 <code>persistGenders</code> 只补缺失键（L454 <code>if (!merged[k]) merged[k]=v</code>）。<b>DeepSeek 已判的说话人，F0 永远不会覆盖它</b>。</p>
+  </div>
+  <div class="root-cause">
+    <div class="title">缺口 2 · F0 可达性脆弱</div>
+    <p class="small">F0 逻辑被包在 <code>if (deepseekKey &amp;&amp; ...)</code> 内（L68）；且依赖 <code>extractAcousticFeaturesForSentences</code> 成功（音频可下载 + 16/24-bit WAV + YIN 检出 ≥2 帧 + 句长 ≥2s）。任一不满足 → <code>f0BySpk</code> 为空 → F0 静默跳过 → 落入时长兜底。</p>
+  </div>
+  <div class="root-cause">
+    <div class="title">缺口 3 · SRT 任务 F0 完全跳过</div>
+    <p class="small">SRT 任务 <code>audioUrlForAcoustic = null</code>（L93）→ 声学提取跳过 → 性别仅靠"时长≥8s→男"兜底，多角色 SRT 配音性别大概率错乱。</p>
+  </div>
+</div>
+
+<div class="card">
+  <h4>实测回归（sintel 系列 05a→05b）</h4>
+  <table>
+    <tbody><tr><th>任务</th><th>时间</th><th>speaker_genders</th><th>状态</th></tr>
+    <tr><td>8fc75d11 (05a)</td><td>17:35</td><td><code>{"spk_0":"male","spk_1":"female","spk_3":"male"}</code></td><td>✅ 正确</td></tr>
+    <tr><td>1ad3e087 (05b)</td><td>18:03</td><td><code>{"spk_0":"female","spk_1":"female","spk_3":"female","spk_4":"female"}</code></td><td>❌ 全女声</td></tr>
+    <tr><td>bbdeda4e (05b-r2)</td><td>18:07</td><td>全 female</td><td>❌</td></tr>
+    <tr><td>ae17484d (05c)</td><td>18:27</td><td>全 female</td><td>❌</td></tr>
+    <tr><td>f7f2c913 (05d)</td><td>18:37</td><td>全 female</td><td>❌</td></tr>
+  </tbody></table>
+  <p class="small">05a 与 05b 之间（17:35→18:03）出现性别检测回归。05b 克隆事件显示 <code>strategy4_failed Top3 逐段全部失败: 无可用段</code> —— 参考音频段提取失败，F0 无法运行 → 落入"时长兜底" → 短句碎片全判女声。这是"全是女声没有男声"的核心机制。</p>
+</div>
+
+<h2 id="s8"><span class="num">8</span>情感来源与传递</h2>
+
+<div class="verdict warn">结论：TTS 用的情感来自 DeepSeek unified 分析（<code>roleEmotionAnalysis.emotions</code>），不是 ASR 输出；情感参数<b>确实传入</b> TTS API 请求体（instruction + volume + SSML），但存在 2 个缺口。</div>
+
+<p>传递链路（完整）：</p>
+<div class="flow">
+  <span class="step">DeepSeek unified 逐句情感</span><span class="arrow">→</span>
+  <span class="step">stage-tts.ts:892 块消息 emotion/intensity</span><span class="arrow">→</span>
+  <span class="step">queue-workers.ts:402 callQwenTTS</span><span class="arrow">→</span>
+  <span class="step">tts-engines.ts:658 buildCosyVoice3Instruction</span><span class="arrow">→</span>
+  <span class="step">WS 请求体 instruction/volume/SSML</span>
+</div>
+
+<div class="card">
+  <h4>两个缺口</h4>
+  <div class="root-cause">
+    <div class="title">缺口 1 · ASR 基线情感是死数据</div>
+    <p class="small"><code>asr.ts:184</code> 提取 <code>emotion</code> 字段（<code>emotion_recognition_enabled: true</code> 多花的模型能力），但全链路无消费者。TTS 情感 100% 依赖 DeepSeek —— DeepSeek 未标注的句子回退全局"平静专业"。</p>
+  </div>
+  <div class="root-cause">
+    <div class="title">缺口 2 · SRT 任务情感恒为默认</div>
+    <p class="small">SRT 任务跳过 unified 分析 → <code>roleEmotionAnalysis</code> 为空 → 所有句子情感回退"平静专业"。</p>
+  </div>
+</div>
+
+<p>强度表达局限：<code>intensityToVolume</code> 只有弱/中/强 3 档映射到音量（tts-engines.ts:409-418），CosyVoice 对 instruction 的遵循程度是质量瓶颈。</p>
+
+<h2 id="s9"><span class="num">9</span>克隆引擎（CosyVoice）与质量</h2>
+
+<div class="verdict ok">结论：克隆引擎是 CosyVoice v3.5-flash enrollment（HTTP <code>voice-enrollment</code> 接口），链路正常。</div>
+
+<pre><code>clone.ts:101-109  target_model: 'cosyvoice-v3.5-flash', max_prompt_audio_length: 30.0
+clone.ts:631-641  preferredCloneEngine: 'cosyvoice3'（硬编码，无 IndexTTS-2.5 预留）</code></pre>
+
+<p>克隆质量流程：<code>scoreSegment</code> 6 维评分 → ABCD 分级（A≥55/B≥38/C≥22/D&lt;22）→ 按等级走策略链 → ECAPA 相似度门禁（enrollment: 阈值 0.75 / 重克隆 0.50）。</p>
+
+<div class="card">
+  <h4>质量差的根因（代码注释实证）</h4>
+  <table>
+    <tbody><tr><th>根因</th><th>影响</th></tr>
+    <tr><td>参考音频 &lt;3s</td><td>声纹信息不足，克隆相似度低（~0.6）</td></tr>
+    <tr><td><code>referenceText</code> 不用于 CosyVoice enrollment</td><td>文本与音频不匹配时相似度降 ~14%</td></tr>
+    <tr><td>跨语言克隆 85%+ 失败率</td><td>中文音色 → 日/西文本失败率高（v1.12.04a 已加跨语言预判跳过 enrollment）</td></tr>
+    <tr><td>SNR &lt;20dB 直接拒绝</td><td>背景嘈杂时无克隆样本</td></tr>
+  </tbody></table>
+</div>
+
+<div class="card">
+  <h4>实测（任务 6a69e28f）</h4>
+  <pre><code>speaker_tracks: clone_grade="D", clone_strategy="degraded_no_vocal", voice_qwen_id="qwen_system"
+pipeline_events: "人声分离失败, 克隆降级为系统音色(按性别), 说话人=1个"
+TTS 全部: "CosyVoice3 失败: [TTSEngineManager] 占位音色不适用 enrollment, 落 Qwen 替补 | voice=qwen_system"</code></pre>
+  <p class="small">分离超时 → 无人声 → 克隆降级 qwen_system → 全部句子用 Qwen 系统音色（非克隆音色）。这是"克隆质量不好"在本任务的直接原因 —— 不是克隆引擎本身的问题，而是<b>上游分离失败导致克隆根本没机会执行</b>。</p>
+</div>
+
+<h2 id="s10"><span class="num">10</span>DeepSeek 调用次数</h2>
+
+<div class="verdict ok">结论：全 pipeline 共 19 个 DeepSeek 调用点（均带记账）。典型 65s 视频基线约 4-5 次，含修复/重试最坏 15-25 次。</div>
+
+<p>实测（任务 6a69e28f，65s，zh→ja，api_call_logs）：</p>
+<table>
+  <tbody><tr><th>调用点</th><th>次数</th></tr>
+  <tr><td>deepseek_asr_correct（ASR 纠错）</td><td>1</td></tr>
+  <tr><td>deepseek_unified_analysis（角色+性别+情感+术语）</td><td>1</td></tr>
+  <tr><td>deepseek_translate_unified（翻译批次）</td><td>1</td></tr>
+  <tr><td>deepseek_translate_per_sentence（补译/扩写）</td><td>1</td></tr>
+  <tr><td><b>合计</b></td><td><b>4 次</b></td></tr>
+</tbody></table>
+
+<p>全部 19 个调用点（apiName → 位置）：</p>
+<pre><code>deepseek_asr_correct            translate.ts:1926
+deepseek_unified_analysis       ai/emotion.ts:762
+deepseek_translate_unified      stage-translate.ts:1498
+deepseek_translate_once         translate.ts:639
+deepseek_translate_per_sentence translate.ts:918
+deepseek_translate              translate.ts:1481
+deepseek_translate_backfill     translate.ts:1578
+deepseek_translate_retry        translate.ts:1654
+deepseek_speaker_assign         translate.ts:410
+deepseek_clone_semantic         ai/clone.ts:858
+deepseek_clone_emotion          ai/emotion.ts:890
+deepseek_emotion / _context     ai/emotion.ts:168/324
+deepseek_compress / _degraded   ai/translation.ts:348/294
+deepseek_srt_translate          srt-stitching.ts:728
+deepseek_drama_intent           dialogue-turn-controller.ts:1224
+deepseek_recompress             elastic-correction.ts:531
+character_bible                 character-bible-service.ts:760</code></pre>
+
+<p>预算护栏：<code>MAX_DEEPSEEK_CALLS_PER_TASK=500</code>、<code>MAX_DEEPSEEK_COST_PER_TASK_USD=1.0</code>、<code>MAX_DEEPSEEK_TOKENS_PER_TASK=1_500_000</code>（config.ts:168-174）。</p>
+
+<h2 id="s11"><span class="num">11</span>翻译规则与校对</h2>
+
+<div class="verdict bad">结论：程序里有 28 个语言对策略 + 14 个目标语言中心策略（设计非常地道），但<b>主路径（unified）只注入"配音要求"一行，语言对专用规则全部失效</b>（缺陷 A）。翻译自检存在但结果无人消费。</div>
+
+<h3>11.1 语言对策略（存在但未生效）</h3>
+<pre><code>engine-utils.ts:1297  'zh-ja': 【中→日】按关系用敬语三档|汉字差异(汽车→電車)|句末助词按角色|
+  【读音保真 v1.10.86】译文必须含平假名或片假名,严禁纯汉字句
+  (纯汉字 TTS 会按中文发音,如"全員集合"应写"全員、集合!"或"総員、集まれ")
+engine-utils.ts:1295  'en-zh': 【英→中】零翻译腔|长句拆短句|被动转主动|口语极致本土化...</code></pre>
+
+<div class="card">
+  <h4>缺陷 A · 取行 bug（stage-translate.ts:1288-1289）</h4>
+  <pre><code>const localizationSnippet = buildLocalizationPrompt(src, tgt)
+    .split('\n').filter(l =&gt; l.startsWith('【')).slice(1, 2).join(' ') || '';
+// ↑ slice(1,2) 只取 idx1 = 【配音要求】行
+//   语言对策略（idx2，如 zh-ja 读音保真规则）被丢弃！</code></pre>
+  <p class="small">注释自称"注入压缩版(target-only 指令)"，但实现取错了行。结果：<b>全部 28 个语言对策略 + 14 个目标语言策略在主路径全部失效</b>，unified prompt 里只剩通用一句"译文须像母语者口语, 非翻译腔"。旧路径（unified 失败降级 stepTranslate）才用完整策略。</p>
+</div>
+
+<h3>11.2 翻译自检（prompt 层摆设）</h3>
+<p>unified prompt 是"翻译+自检+情感标记+音节精算+时长预算"五合一，输出 schema 含 <code>quality_pass</code>/<code>quality_notes</code>/<code>overall_quality</code>，但<b>这些字段全库无读取方</b>。真正的质量门是 stage-align 的漂移检测（基于音频时间轴漂移，而非模型自评）。</p>
+
+<h3>11.3 "译文出现源语言"根因链</h3>
+<div class="card">
+  <div class="root-cause">
+    <div class="title">根因 1 · unified prompt 无"禁止输出源语言"指令</div>
+    <p class="small">v1.10.86 主动删除了"语言保真"规则（该规则让 DeepSeek 把源语言专有名词原样保留），但<b>没补上等价的"禁止输出源语言"正向指令</b>。</p>
+  </div>
+  <div class="root-cause">
+    <div class="title">根因 2 · zh-ja"读音保真"规则未注入主路径（缺陷 A）</div>
+    <p class="small">"译文必须含平假名或片假名,严禁纯汉字句"规则被 <code>.slice(1,2)</code> 丢弃 → 模型输出纯汉字"全員、集合！" → TTS 按中文发音。这正是"全员集合说出中文"的直接机制。</p>
+  </div>
+  <div class="root-cause">
+    <div class="title">根因 3 · 语言守卫只拦精确相等</div>
+    <p class="small">TTS 前检查 <code>译文 === 原文</code> 才抛错（orchestrator.ts:1177-1204）；"全員集合"→"全员集合"（标点/汉字差异）不满足 <code>===</code>，直接放行进 TTS。</p>
+  </div>
+  <div class="root-cause">
+    <div class="title">根因 4 · 覆盖率校验只认精确相等</div>
+    <p class="small"><code>effectiveDubbingCoverage</code> 仅把 <code>src.trim() === t.trim()</code> 判为无效，近似源语言的译文被计为有效。</p>
+  </div>
+</div>
+
+<h3>11.4 翻译记忆库与术语表（机制完整）</h3>
+<ul>
+  <li><b>TM 记忆库</b>：<code>lookupTranslationMemory</code>（source_hash 精确命中 + Levenshtein 0.90 语义匹配，跨用户共享），<code>isMemoryTargetValid</code> 防污染（译文=源文或非目标语言脚本则跳过）。</li>
+  <li><b>术语表</b>：用户术语表 CRUD + DeepSeek 动态术语 + 领域术语库，注入 unified prompt（"术语表硬锁"），但仅当 <code>glossaryTerms.length &gt; 0</code> 才注入。</li>
+</ul>
+
+<h2 id="s12"><span class="num">12</span>SRT 上传 vs 无 SRT</h2>
+
+<div class="verdict warn">结论：程序设计上，上传 SRT 是"文本/时间轴质量提升 + 分析链路降级"的混合体。对纯翻译/校对是提升；对配音是<b>性别/角色维度降级</b>。</div>
+
+<table>
+  <tbody><tr><th>环节</th><th>无 SRT（视频）</th><th>上传 SRT</th></tr>
+  <tr><td>ASR 文字识别</td><td>✅ 完整</td><td>❌ 跳过（用上传字幕）</td></tr>
+  <tr><td>ASR 纠错</td><td>✅</td><td>❌ 跳过（用户文本优先）</td></tr>
+  <tr><td>unified 分析（角色/性别/情感/语境）</td><td>✅</td><td>❌ 跳过</td></tr>
+  <tr><td>F0 声学性别</td><td>✅</td><td>❌ 跳过（仅时长兜底）</td></tr>
+  <tr><td>说话人 diarization</td><td>✅ ASR 自带</td><td>⚠️ 恒跳过（缺陷 B）</td></tr>
+  <tr><td>文本/时间轴准确性</td><td>ASR 估计</td><td>✅ 用户人工（更高）</td></tr>
+</tbody></table>
+
+<p>时间轴优先：上传 SRT 的时间轴在 SRT 输入路径中<b>绝对优先</b>（stage-asr.ts:1165-1180），贯穿翻译、TTS 槽位、音频合并、字幕产物。质量门对 SRT 任务无差异化逻辑，但 SRT 时间轴更准 → 漂移更小 → 更容易通过。</p>
+
+<div class="card">
+  <h4>关键结论</h4>
+  <ul>
+    <li>上传 SRT 的<b>文本和时间轴质量确实更高</b>（用户人工校对），且省 ASR/克隆费用（字幕输入免 ASR 和克隆费）。</li>
+    <li>但<b>角色/性别/情感/语境系统性缺失</b>：SRT 任务无 unified 分析、无 F0，性别仅靠"时长≥8s→男"兜底 → 多角色 SRT 配音性别大概率错乱。</li>
+    <li>机制级缺陷 B 使 SRT 任务<b>永远单说话人</b>（diarization 永不调用）。</li>
+  </ul>
+</div>
+
+<h2 id="s13"><span class="num">13</span>三个人工校对环节设计</h2>
+
+<div class="verdict info">结论：三个人工校对环节（字幕/翻译/终审）设计完整（暂停-恢复闭环 + proofreading_jobs 表），当前恒放行（ENABLE_MANUAL_REVIEW=false），恢复为可配置只需改 2 处。</div>
+
+<p>设计（stage-review.ts）：</p>
+<table>
+  <tbody><tr><th>环节</th><th>暂停点</th><th>进度</th><th>当前状态</th></tr>
+  <tr><td>manual_subtitle_review（字幕校对）</td><td>ASR 后</td><td>37%</td><td>恒放行</td></tr>
+  <tr><td>manual_translation_review（翻译校对）</td><td>翻译后</td><td>55%</td><td>恒放行</td></tr>
+  <tr><td>manual_final_review（最终质检）</td><td>混音后</td><td>100%</td><td>无条件短路 → done</td></tr>
+</tbody></table>
+
+<p>完整暂停-恢复闭环保留：<code>manualEnabled</code>（读 skip_*_proofread 标志）、<code>ensureReviewJob</code>（建 proofreading_jobs + proofreading_segments）、<code>applyManualCorrections</code>（submitted/approved 时写回 state）。</p>
+
+<div class="card">
+  <h4>恢复为可配置需改 2 处</h4>
+  <ol>
+    <li><code>stage-review.ts:28</code>：<code>ENABLE_MANUAL_REVIEW</code> 改为 <code>true</code>（下方完整闭环即刻生效）。</li>
+    <li><code>orchestrator.ts:704-712</code>：<code>manual_final_review</code> 从无条件短路改为按 skip 条件短路（注释已明确说明）。</li>
+  </ol>
+</div>
+
+<div class="verdict ok">当前"前端灰调、后端放行、走自动化"的设计意图已正确实现 —— 程序整体通畅，人工环节只是暂时不运行，零风险。</div>
+
+<h2 id="s14"><span class="num">14</span>10% / 55% / 72% 卡顿根因</h2>
+
+<h3>14.1 10% 卡顿（asr_processing）</h3>
+<div class="card">
+  <p><b>机制：提交后写 10%，轮询进度每 5 轮才落 D1。</b></p>
+  <pre><code>stage-asr.ts:126   提交后写 10
+stage-asr.ts:720   if (state.asrPollCount % 5 === 0 || pollProgress &gt;= 30) {
+                     await updateTaskProgress(...)   // 每 5 轮才写一次
+                   }
+轮询间隔: poll0-4=1500ms, poll5-14=2000ms, poll15-29=2500ms, poll30+=5000ms</code></pre>
+  <p class="small">前 5 轮（约 9-10s）进度 11/12/14/15 全部不落 D1，用户看到纹丝不动停在 10%。之后 16→30 慢速线性爬升（单任务最多 480 轮，VAD 1000 轮）。<b>ASR 阶段没有心跳</b>（<code>startProgressHeartbeat</code> 全库仅 stage-extract.ts:515 一处调用）。</p>
+</div>
+
+<h3>14.2 55% 卡顿（translate→tts 过渡）</h3>
+<div class="card">
+  <p><b>机制：translate_unified 完成写 55% 后，tts_synthesize 入口有一串闸门链。</b></p>
+  <pre><code>stage-translate.ts:1872  翻译完成写 55
+orchestrator.ts:1068-1172  voiceId 等待: pendingDelayMs=15000 空转, 上限 VOICE_WAIT_MAX_MS=3min
+orchestrator.ts:676-693   余额闸门 checkExecutionBalance
+orchestrator.ts:1214-1235 成本预检 checkPreExecutionBudget
+orchestrator.ts:2617-2628 B 波心跳: 45 + (elapsed/300000)*10 → 5 分钟爬到 55</code></pre>
+  <p class="small">若 B 波克隆慢，进度长时间停在 55%（B 波心跳上限 55 是防"透支"导致单调守卫拦截后续节点的设计）。voiceId 等待期间进度恒 55。</p>
+</div>
+
+<h3>14.3 72% 卡顿（tts 聚合尾 → wsola）</h3>
+<div class="card">
+  <p><b>机制：orchestrator 中无硬编码 72；72 来自 SSE 段级插值 + 节点表回退。</b></p>
+  <pre><code>types.ts:423        STEP_PROGRESS_NODE[8] = 72  (wsola_adjust 节点)
+pipeline-do.ts:2237-2244  TTS 段级插值: stepBase=62, nextStepBase=72
+                          percent = max(D1进度, 62 + (72-62)*segRatio)
+stage-align.ts:46    WSOLA 入口写 76
+stage-align.ts:236   WSOLA 完成写 85   ← 76→85 之间无中间进度（弹性纠偏最长 60s）</code></pre>
+  <p class="small">72% 卡顿 = TTS 聚合尾部（SSE 推向 72）+ 步骤切换 + WSOLA 弹性纠偏（76→85 无中间进度）的组合感知。</p>
+</div>
+
+<div class="verdict warn">三处卡点本质是同一类问题："长步骤无中间进度 + D1 写入降频 + 前端单调钳制"。应机制级统一解决（所有长步骤统一接入 10s 心跳 + 批级进度写入粒度对齐），而非逐点打补丁。</div>
+
+<h2 id="s15"><span class="num">15</span>前端进度词来源</h2>
+
+<div class="verdict info">结论：这些词是前端硬编码的 <code>task.status → 中文</code> 映射表（constants.ts:154-188），不是后端推送的。后端只推 status 字段，前端查表得到中文词。</div>
+
+<p>完整映射表（<code>frontend/src/lib/constants.ts</code> L154-188）：</p>
+<table>
+  <tbody><tr><th>status key</th><th>中文 label</th></tr>
+  <tr><td>asr_processing</td><td>语音识别中（含 extract_audio + asr_recognize）</td></tr>
+  <tr><td>speaker_track_building</td><td>说话人分离中</td></tr>
+  <tr><td>sound_prompt_extracting</td><td>声音克隆中</td></tr>
+  <tr><td>ai_proofreading</td><td>AI校对中</td></tr>
+  <tr><td>alignment_calibrating</td><td>对齐校准中</td></tr>
+  <tr><td>waiting_subtitle_proofread</td><td>等待字幕校对（人工）</td></tr>
+  <tr><td>translating</td><td>翻译中</td></tr>
+  <tr><td>waiting_translation_proofread</td><td>等待翻译校对（人工）</td></tr>
+  <tr><td>tts_synthesizing</td><td>语音合成中</td></tr>
+  <tr><td>aligning</td><td>音频对齐中（wsola_adjust）</td></tr>
+  <tr><td>verifying</td><td>质量检测中（unified_quality_check）</td></tr>
+  <tr><td>merging</td><td>音视频合并中</td></tr>
+  <tr><td>muxing</td><td>封装中（merge_output）</td></tr>
+  <tr><td>waiting_final_qc_proofread</td><td>等待最终质检（人工）</td></tr>
+  <tr><td>done / failed / cancelled</td><td>已完成 / 失败 / 已取消</td></tr>
+</tbody></table>
+
+<p>显示逻辑（client.tsx:1060-1087 <code>getCurrentStageName()</code>）：细粒度步骤词优先（<code>status.label</code>），回退 WS 粗阶段，再回退 <code>V3_STATUS_TO_STAGE</code>。"小人头上"文字 = <code>${runnerStageName} ${Math.round(progress)}%</code>（client.tsx:258）。</p>
+
+<h2 id="s16"><span class="num">16</span>"全员集合"任务问题实证</h2>
+
+<div class="verdict bad">结论：任务 6a69e28f（CN→JP test.mp4，65s）的所有用户反馈问题均有明确根因，且相互关联 —— 上游分离超时引发连锁降级。</div>
+
+<h3>16.1 问题逐项实证</h3>
+<table>
+  <tbody><tr><th>用户反馈</th><th>实证</th><th>根因</th></tr>
+  <tr>
+    <td>"全员集合"说出中文</td>
+    <td>TTS 实际文本 <code>全員注目</code> / segments 存 <code>全員、集合！</code>（纯汉字无假名）</td>
+    <td>缺陷 A：zh-ja"读音保真"规则未注入 → 纯汉字译文 → TTS 按中文发音</td>
+  </tr>
+  <tr>
+    <td>译文出现源语言</td>
+    <td>unified prompt 无"禁止输出源语言"指令 + 语言对策略失效</td>
+    <td>缺陷 A + 根因 1/3/4（§11.3）</td>
+  </tr>
+  <tr>
+    <td>全是女声没有男声</td>
+    <td>speaker_genders={"spk_0":"male"} 但克隆降级 qwen_system；sintel 05b-05d 全 female</td>
+    <td>分离超时→克隆降级系统音色；性别链路缺口（§7）</td>
+  </tr>
+  <tr>
+    <td>声音衔接生硬卡顿</td>
+    <td>非重叠段"淡出至 0 + 淡入"静音桥接，无真交叉淡化；8ms 淡入淡出；WSOLA 拉伸上限 1.05</td>
+    <td>merge 段间无重叠 crossfade（§9 声音衔接）</td>
+  </tr>
+  <tr>
+    <td>没有背景音乐</td>
+    <td><code>bgm_flac_r2_key=null</code>（分离超时未产出伴奏轨）</td>
+    <td>火山分离 API 轮询超时 300s/85 次</td>
+  </tr>
+</tbody></table>
+
+<h3>16.2 事件时间线（任务 6a69e28f）</h3>
+<pre><code>05:26:54  extract_audio  volc_poll_timeout: 分离轮询超时 300000ms (85次)
+05:26:54  extract_audio  vocal_sep_no_ffmpeg: 分离未产出 vocal, 克隆走降级链
+05:26:55  asr_recognize  进入 ASR 阶段 (6%)
+05:26:58  voice_clone    clone_degraded_system_voice: 人声分离失败, 克隆降级为系统音色
+05:27:10  speaker_diarize bwave_results: speaker=fulfilled translate=fulfilled clone=fulfilled
+05:27:14  tts_synthesize TTS Queue 分发 4 块 (共 20 句)
+05:27:22+ tts           全部句子: CosyVoice3 失败 → 落 Qwen 替补 | voice=qwen_system
+05:28:11  done (98%)</code></pre>
+
+<h3>16.3 声音衔接生硬的技术细节</h3>
+<div class="card">
+  <ul>
+    <li><b>无真交叉淡化</b>：非重叠段之间是"段尾淡出至 0 + 下段段首 30ms 淡入"的静音桥接（dsp-merge.ts:1018-1056），产生可闻微停顿。仅当段在时间轴上重叠时才有等功率 crossfade（双音轨分层）。</li>
+    <li><b>8ms 线性淡入淡出</b>（stage-merge.ts:241-262）不足以消除 click。</li>
+    <li><b>WSOLA 上限低</b>：压缩上限 1.15 / 拉伸上限 1.05（dsp-merge.ts:26-38），时长偏差大的段仍硬切。</li>
+    <li><b>静音兜底段</b>：<code>silence://</code> 生成的静音段与语音段边界无过渡。</li>
+  </ul>
+</div>
+
+<h2 id="s17"><span class="num">17</span>根因汇总与优先级</h2>
+
+<table>
+  <tbody><tr><th>#</th><th>根因</th><th>优先级</th><th>影响</th></tr>
+  <tr><td>A</td><td>stage-translate.ts:1288-1289 <code>.slice(1,2)</code> 取行 bug → 语言对策略全部失效</td><td><span class="pill p0">P0</span></td><td>译文不地道、源语言混入、纯汉字按中文发音</td></tr>
+  <tr><td>B</td><td>stage-asr.ts:287-310 speaker_id 先硬编码 → srtHasSpeakers 恒 true → diarization 永不调用</td><td><span class="pill p0">P0</span></td><td>SRT 任务永远单说话人</td></tr>
+  <tr><td>C</td><td>stage-speaker.ts:348-454 F0"覆盖"DeepSeek 是假象（只填空）+ 时长兜底恒判女声</td><td><span class="pill p0">P0</span></td><td>性别错乱、全女声无男声</td></tr>
+  <tr><td>D</td><td>unified prompt 无"禁止输出源语言"指令 + 语言守卫只拦精确相等</td><td><span class="pill p0">P0</span></td><td>译文混入源语言</td></tr>
+  <tr><td>E</td><td>ASR 情感字段死数据（emotion_recognition_enabled 白开）+ SRT 任务无情感</td><td><span class="pill p1">P1</span></td><td>情感表达弱、SRT 配音平淡</td></tr>
+  <tr><td>F</td><td>克隆引擎无多引擎切换预留（IndexTTS-2.5）</td><td><span class="pill p1">P1</span></td><td>无法切换更优引擎</td></tr>
+  <tr><td>G</td><td>段间无真交叉淡化 + 8ms 淡入淡出 + WSOLA 上限低</td><td><span class="pill p1">P1</span></td><td>声音衔接生硬卡顿</td></tr>
+  <tr><td>H</td><td>10%/55%/72% 长步骤无中间进度 + D1 写入降频</td><td><span class="pill p1">P1</span></td><td>用户感知卡顿</td></tr>
+  <tr><td>I</td><td>SRT 任务跳过 unified 分析 + F0 → 角色/性别/情感缺失</td><td><span class="pill p1">P1</span></td><td>SRT 配音维度降级</td></tr>
+  <tr><td>J</td><td>分离 API 超时无重试降级（300s 超时后直接放弃 vocal）</td><td><span class="pill p1">P1</span></td><td>无 BGM、克隆降级</td></tr>
+  <tr><td>K</td><td>srtRemappedSegments 死代码（"P0-07 重映射时间轴"永不生效）</td><td><span class="pill p2">P2</span></td><td>大块 TTS 时间轴未重映射</td></tr>
+  <tr><td>L</td><td>多段无 BGM 路径无响度归一（依赖 mixPcmWithDucking 内部 loudnorm）</td><td><span class="pill p2">P2</span></td><td>响度不一致</td></tr>
+</tbody></table>
+
+<h2 id="s18"><span class="num">18</span>机制级优化建议</h2>
+
+<p>遵循"机制级根治 + 代码收敛"哲学，以下建议均为统一机制而非挂点补丁：</p>
+
+<h3>18.1 翻译链路（P0）</h3>
+<div class="card">
+  <ol>
+    <li><b>修复取行 bug</b>：<code>buildLocalizationPrompt</code> 改为返回结构化对象（原则/配音要求/语言对策略/配音适配），unified prompt 注入完整语言对策略，而非 <code>.slice(1,2)</code> 猜行。</li>
+    <li><b>补"禁止输出源语言"正向指令</b>：unified prompt 显式声明"指定目标语言则全部输出该语言，禁止保留任何源语言文字；专有名词按目标语习惯音译"。</li>
+    <li><b>语言守卫升级</b>：从"精确相等"升级为"Unicode 脚本比例检测"（译文主要脚本 ≠ 目标语言脚本 → 拦截重译），覆盖"全員集合"这类近似源语言。</li>
+    <li><b>自检结果接入质量门</b>：<code>quality_pass</code>/<code>overall_quality</code> 从"摆设"变为质量门输入（与漂移检测联合决策）。</li>
+  </ol>
+</div>
+
+<h3>18.2 性别链路（P0）</h3>
+<div class="card">
+  <ol>
+    <li><b>F0 改为真覆盖</b>：合并顺序改为"F0 明确区间优先，DeepSeek 仅填空/灰区"，并让 <code>state.precomputedGenders</code> 保存合并结果而非最后来源。</li>
+    <li><b>F0 可达性加固</b>：声学提取失败时落诊断事件（非静默跳过），并保留 DeepSeek 兜底路径。</li>
+    <li><b>时长兜底去性别化</b>：<code>dur≥8s?male:female</code> 改为"无信号时按 voiceId 稳定 hash 50/50 分配"（与 tts-engines.ts:212-232 对齐），避免短句碎片恒判女声。</li>
+  </ol>
+</div>
+
+<h3>18.3 SRT 链路（P0）</h3>
+<div class="card">
+  <ol>
+    <li><b>修复 srtHasSpeakers 恒 true</b>：判断应基于 SRT 原始文本中的说话人标记（解析 <code>&lt;i&gt;</code>/<code>{spk_}</code>），而非已硬编码的字段。</li>
+    <li><b>parseSRT 支持说话人标记解析</b>：识别 <code>&lt;i&gt;Speaker1&lt;/i&gt;</code> / <code>{spk_0}</code> 并映射为 speaker_id。</li>
+    <li><b>SRT 任务补性别/情感</b>：SRT 无说话人标记时调用 diarization-only ASR 补说话人；SRT 任务保留 F0（用 vocal 轨）或至少保留 DeepSeek 性别推断。</li>
+  </ol>
+</div>
+
+<h3>18.4 声音衔接（P1）</h3>
+<div class="card">
+  <ol>
+    <li><b>段间真交叉淡化</b>：非重叠段之间引入 10-20ms 等功率重叠 crossfade（而非"淡出至 0 + 淡入"静音桥接）。</li>
+    <li><b>淡入淡出加长</b>：8ms → 20-30ms 线性/余弦淡化，消除 click。</li>
+    <li><b>WSOLA 上限放宽</b>：拉伸上限 1.05 → 1.15（与压缩对称），减少硬切。</li>
+    <li><b>静音兜底段加过渡</b>：<code>silence://</code> 段与语音段边界加 5ms 交叉淡化。</li>
+  </ol>
+</div>
+
+<h3>18.5 进度体验（P1）</h3>
+<div class="card">
+  <ol>
+    <li><b>统一长步骤心跳</b>：ASR/翻译/TTS/WSOLA 全部接入 <code>startProgressHeartbeat</code>（10s），消除 10%/55%/72% 静默窗口。</li>
+    <li><b>批级进度写入粒度对齐</b>：ASR 每 5 轮写一次 → 每轮写（配合等值跳过 + 节流，D1 开销可控）。</li>
+    <li><b>SSE 插值与 D1 权威值收敛</b>：72 的 SSE 插值应与 D1 实际进度一致，避免"前端 72 后端 65"的跳变。</li>
+  </ol>
+</div>
+
+<h3>18.6 克隆/引擎（P1）</h3>
+<div class="card">
+  <ol>
+    <li><b>预留多引擎切换架构</b>：<code>preferredCloneEngine</code> 从字面量改为枚举 + 路由层（cosyvoice3 / indextts25 / qwen），为 IndexTTS-2.5 预留接口（符合流程图设计）。</li>
+    <li><b>分离超时重试降级</b>：separate-voice 300s 超时后增加"重试一次 + 降级保 vocal"策略，避免直接放弃 vocal 导致连锁降级。</li>
+    <li><b>克隆参考段提取加固</b>：05b 的 <code>strategy4_failed 无可用段</code> 说明参考段提取失败率高，需诊断事件 + 多段拼接兜底。</li>
+  </ol>
+</div>
+
+<h3>18.7 人工校对（P2，暂不启用）</h3>
+<div class="card">
+  <ol>
+    <li>恢复为可配置只需改 2 处（§13），建议将 <code>ENABLE_MANUAL_REVIEW</code> 改为 env 变量驱动（而非硬编码常量）。</li>
+    <li>前端灰调状态保留，后端放行逻辑不变 —— 当前设计已满足"整体通畅、暂时不运行"。</li>
+  </ol>
+</div>
+
+<h2 id="s20"><span class="num">20</span>Cloudflare 存储清理机制审计（R2 2G 管控）</h2>
+
+<div class="verdict ok">结论：三层清理架构（cron 每 5 分钟 + DO Alarm 60 分钟 + R2 lifecycle 每日）代码层面<b>全部在运行</b>；但存在 3 个 R2 前缀与若干 D1 表<b>无定时清理</b>，是 R2 增长到 2G 的主要隐患。</div>
+
+<h3>20.1 三层清理架构（均在运行）</h3>
+<div class="table-wrap">
+<table>
+  <tr><th>机制</th><th>触发</th><th>频率</th><th>证据</th><th>状态</th></tr>
+  <tr><td>应用层 <code>runCleanup()</code></td><td>Cron Trigger <code>*/5 * * * *</code></td><td>每 5 分钟</td><td>wrangler.jsonc:205 + index.ts:502 <code>scheduled</code></td><td><span class="pill good">运行</span></td></tr>
+  <tr><td>任务级 <code>cleanupTaskHistory()</code></td><td>PipelineDO Alarm</td><td>终态后 60 分钟</td><td>lifecycle-cleanup.ts + pipeline-do.ts:1195-1217</td><td><span class="pill good">运行</span></td></tr>
+  <tr><td>R2 <code>lifecycle_rules</code></td><td>平台级每日扫描</td><td>每日</td><td>wrangler.jsonc:32-40（cache/1d、scratchpad/1d、audio/1d、enrollment/1d）</td><td><span class="pill good">运行</span></td></tr>
+</table>
+</div>
+
+<h3>20.2 R2 前缀保留期与缺口</h3>
+<div class="table-wrap">
+<table>
+  <tr><th>前缀</th><th>保留期</th><th>覆盖方式</th><th>状态</th></tr>
+  <tr><td>voice_read / voices / voice_preview / voice_design / uploads / results / audio / tts / cache/tts / cache/vocalsep</td><td>12-48h</td><td>cleanup.ts 应用层</td><td><span class="pill good">已覆盖</span></td></tr>
+  <tr><td>cache/asr</td><td>3d</td><td>cleanup.ts + lifecycle</td><td><span class="pill good">已覆盖</span></td></tr>
+  <tr><td>tasks/{id}/tts/*.wav（句段）</td><td>48h（3 天下载窗口）</td><td>cleanup.ts:328-358</td><td><span class="pill good">已覆盖</span></td></tr>
+  <tr><td><b>clones/（克隆中间产物）</b></td><td><b>无</b></td><td><b>cleanup.ts 与 lifecycle 均无此前缀</b></td><td><span class="pill p0">P0 永久堆积</span></td></tr>
+  <tr><td><b>checkpoints/（检查点）</b></td><td><b>无</b></td><td><b>均无覆盖</b></td><td><span class="pill p0">P0 永久堆积</span></td></tr>
+  <tr><td><b>volcengine_callbacks/（回调落盘）</b></td><td><b>无</b></td><td><b>均无覆盖</b></td><td><span class="pill p1">P1 永久堆积</span></td></tr>
+</table>
+</div>
+<p class="small">克隆中间产物（safevc/merged/purified/seg wav，ai/clone.ts 15 处写入）每人声数 MB~数十 MB，是 R2 增长的主因之一；仅手动删任务时才清理（task-action.ts:205）。</p>
+
+<h3>20.3 D1 表清理与缺口</h3>
+<div class="table-wrap">
+<table>
+  <tr><th>表</th><th>规则</th><th>状态</th></tr>
+  <tr><td>tasks / segments / speaker_tracks / queue_task_status / task_checkpoints</td><td>done&gt;3d / failed&gt;1d</td><td><span class="pill good">已覆盖</span></td></tr>
+  <tr><td>api_call_logs / cost_audit_log / pipeline_events / processed_messages / rate_limit / tts_rate_limiter / upload_sessions / translation_cache / asr_cache</td><td>3d-30d 或过期</td><td><span class="pill good">已覆盖</span></td></tr>
+  <tr><td><b>task_heartbeat（心跳）</b></td><td><b>只写不删</b>（每 alarm 一行）</td><td><span class="pill p1">P1 长期膨胀</span></td></tr>
+  <tr><td><b>scenes / dialogue_turns / complexity_scores / multi_state_embeddings / workflow_checkpoints / workflow_segment_status / proofreading_*</b></td><td><b>无 cron 清理</b>（仅删任务/删用户时手动清）</td><td><span class="pill p1">P1 长期膨胀</span></td></tr>
+  <tr><td>daily_cost_summary / daily_cost_accumulator / credit_transactions（账本）</td><td>无删除（按日 1 行 / 流水保留）</td><td><span class="pill p2">增长可控</span></td></tr>
+  <tr><td>pipeline_events 清理</td><td>同 SQL 两处并存（cleanup.ts:429-438 与 544-552）</td><td><span class="pill p2">重复机制待收敛</span></td></tr>
+</table>
+</div>
+
+<h3>20.4 免费额度对照与 90% 管控线</h3>
+<div class="table-wrap">
+<table>
+  <tr><th>存储</th><th>免费额度</th><th>当前使用</th><th>90% 红线</th><th>风险</th></tr>
+  <tr><td>R2</td><td>10 GB-month</td><td>~2 GB（20%）</td><td>9 GB</td><td><span class="pill p1">无清理前缀将匀速上涨</span></td></tr>
+  <tr><td>D1</td><td>5 GB</td><td>需控制台确认</td><td>4.5 GB</td><td><span class="pill p1">心跳/7 张任务表只增不删</span></td></tr>
+  <tr><td>KV</td><td>1 GB</td><td>需控制台确认</td><td>0.9 GB</td><td><span class="pill p2">低风险</span></td></tr>
+</table>
+</div>
+<p class="small">参考：R2 超量 $0.015/GB-month、D1 超量 $0.75/GB-month、KV 超量 $0.50/GB-month<sup><a href="#cite-5">[5]</a></sup>。控制成本的关键不是"额度内省钱"，而是<b>补齐无清理前缀 + 心跳表删除</b>，让清理机制完整覆盖所有写入路径。</p>
+
+<h3>20.5 机制级修复方向（待批准）</h3>
+<div class="card">
+  <ol>
+    <li><b>补齐 3 个 R2 前缀清理</b>：clones/ 12h、checkpoints/ 3d、volcengine_callbacks/ 7d —— 纳入 cleanup.ts 统一前缀表（与现有结构同构，一行配置）。</li>
+    <li><b>task_heartbeat 定时删除</b>：任务终态后 3d 删除关联心跳行（cleanup.ts 增加一条 DELETE）。</li>
+    <li><b>7 张任务关联表纳入 cron 清理</b>：按 tasks 状态 join 删除（与 segments 同构），消除"仅手动删"的依赖。</li>
+    <li><b>pipeline_events 清理收敛</b>：两处重复 SQL 合一（符合"避免同一链路上多套方案并存"原则）。</li>
+    <li><b>清理可观测</b>：当前 cleanup 摘要走 console.log 被 LOG_LEVEL=warn 过滤，建议增加 D1 清理记录表（清理对象数/字节数），面板可见，验证"清理确实在跑"。</li>
+  </ol>
+</div>
+
+<h2 id="s21"><span class="num">21</span>Cloudflare Containers 引入评估（成本控制）</h2>
+
+<div class="verdict ok">结论：Containers <b>值得引入</b>，仅用于重型音频处理（母带混音/EBU R128 响度/侧链压限）；关键发现是 <b>Workers Paid $5 本身已包含 375 vCPU-min/月 的 Containers 额度</b>，对 VCD 当前用量（每月几十到几百任务）<b>完全可以在 $5 内零额外成本</b>运行。必须配套消费保护设计。</div>
+
+<h3>21.1 关键事实：Containers 并非"完全独立计费"</h3>
+<div class="table-wrap">
+<table>
+  <tr><th>计量</th><th>单价（超量）</th><th>Workers Paid $5 内含</th></tr>
+  <tr><td>vCPU</td><td>$0.000020 / vCPU-s</td><td><b>375 vCPU-min/月（= 22,500 vCPU-s）</b></td></tr>
+  <tr><td>内存</td><td>$0.0000025 / GiB-s</td><td>25 GiB-hrs/月</td></tr>
+  <tr><td>磁盘</td><td>$0.00000007 / GB-s</td><td>200 GB-hrs/月</td></tr>
+  <tr><td>出口（NA/EU）</td><td>$0.025 / GB</td><td>1 TB/月</td></tr>
+</table>
+</div>
+<p>Containers 于 2026-04-13 GA，按 <b>10ms 活跃切片计费</b>，闲置只付内存+磁盘；单实例上限 4 vCPU / 12 GiB / 20 GB 磁盘；无 GPU、无持久盘、无自动伸缩；冷启动 1-3 秒<sup><a href="#cite-6">[6]</a></sup><sup><a href="#cite-7">[7]</a></sup>。</p>
+
+<h3>21.2 成本测算（VCD 母带处理场景）</h3>
+<div class="card">
+  <p><b>场景</b>：每任务 1 次母带混音（侧链压限 + EBU R128 + 交叉淡化），标准实例 0.5 vCPU / 1 GiB，ffmpeg 处理约 30-60s：</p>
+  <pre><code>单任务成本:
+  vCPU: 0.5 × 45s × $0.000020 = $0.00045
+  内存: 1 GiB × 45s × $0.0000025 = $0.0001125
+  单任务 ≈ $0.00056
+$5 内含 22,500 vCPU-s → 可承载 22,500 / (0.5×45) ≈ 1000 个任务/月免费
+按 200min 长视频任务 (处理 5-10 分钟): 22,500 / (0.5×420) ≈ 107 个任务/月免费</code></pre>
+  <p class="small">结论：<b>VCD 早期用户量（每月几十~几百任务）在 $5 计划内零额外成本</b>。对比：不用 Containers 则需自研 Rust WASM 实现 EBU R128/侧链压限/交叉淡化，工程量数周~数月，且质量难以对齐 ffmpeg 成熟滤镜。</p>
+</div>
+
+<h3>21.3 与 Rust WASM 自研对比</h3>
+<div class="table-wrap">
+<table>
+  <tr><th>维度</th><th>Rust WASM（Worker 内）</th><th>Containers（ffmpeg）</th></tr>
+  <tr><td>工程量</td><td>自研 EBU R128/侧链/WSOLA 全套，数周-数月</td><td>Dockerfile + ffmpeg 命令，数天</td></tr>
+  <tr><td>质量</td><td>需逐项验证对齐标准（响度/压限精度风险）</td><td>ffmpeg 成熟滤镜（loudnorm/sidechaincompress），行业标准</td></tr>
+  <tr><td>CPU 配额</td><td>消耗 Worker CPU（5min/请求上限，长视频 5-10min 处理会击穿）</td><td>不占 Worker CPU 配额（10ms 切片独立计费）</td></tr>
+  <tr><td>成本</td><td>$0（含在 $5）</td><td>$5 内含额度内 $0；超出按量（见 21.4 保护）</td></tr>
+  <tr><td>内存</td><td>128MB 限制（此前 FFmpeg.wasm 在 DO 内 OOM 的根因）</td><td>单实例 12 GiB</td></tr>
+</table>
+</div>
+<div class="verdict warn">策略建议：<b>双路径并存</b>——Containers 为主（高质量、省人力），Rust WASM 保留为降级路径（Containers 不可用/超预算时 fallback），避免"断线"即全瘫。符合"机制级根治 + 接线复用"哲学。</div>
+
+<h3>21.4 成本保护设计（重点）</h3>
+<div class="card">
+  <ol>
+    <li><b>月度 vCPU 预算熔断</b>：复用现有保险丝机制 —— 增加 <code>CONTAINER_MONTHLY_VCPU_S_LIMIT</code>（如 20,000 vCPU-s ≈ $5 内含 89%，留 10% 余量），超限自动切回 WASM 降级路径，并告警。</li>
+    <li><b>任务级容器计时器</b>：每任务容器执行秒数上限（如 15 分钟），超限终止并落诊断事件（防死循环/恶意长任务）。</li>
+    <li><b>并发闸门</b>：复用 global-tts-limiter 模式，容器任务并发上限（如 2-3 个），防止突发峰值同时唤醒多个实例。</li>
+    <li><b>成本记账</b>：每次容器调用记 cost_audit_log（api_name='container_ffmpeg'），与现有 cost-monitor 面板同源可查。</li>
+    <li><b>冷启动优化</b>：<code>sleepAfter</code> 设 10 分钟（非无限保活），平衡"复热延迟"与"闲置计费"；批量任务可预唤醒一个实例。</li>
+    <li><b>出口限制</b>：容器只写 R2（内网，无出口费），不对外直出（1TB 内含够用，但仍需记账监控）。</li>
+  </ol>
+</div>
+
+<h2 id="s22"><span class="num">22</span>网站安全审计与加固方案</h2>
+
+<div class="verdict bad">结论：基础安全面扎实（JWT/PBKDF2/参数化查询/CORS/魔数校验均正确），但存在 <b>3 个 P0 高危（资金/提权）与 6 个 P1 风险</b>，其中"兑换码 Math.random 熵源"与"超管=用户名判定 + 开放注册"是必须优先修复的资金级漏洞。</div>
+
+<h3>22.1 P0 高危（资金/提权，必须优先修）</h3>
+<div class="card">
+  <div class="root-cause">
+    <div class="title">P0-1 · 兑换码熵源不安全（shared.ts:977）</div>
+    <p class="small"><code>Math.random()</code> 生成 16 位兑换码（V8 xorshift128+，<b>可预测</b>），兑换码 = 金钱，可被批量爆破。修法：改 <code>crypto.getRandomValues</code>。</p>
+  </div>
+  <div class="root-cause">
+    <div class="title">P0-2 · 超级管理员 = 用户名判定 + 开放注册 + 硬编码回退（shared.ts:747-749）</div>
+    <p class="small"><code>isSuperIerTMT = username === (SUPER_ADMIN_USERNAME || 'ierTMT')</code>，与 role 无关；<code>SUPER_ADMIN_USERNAME</code> 未配置时回退字面量 <code>'ierTMT'</code>，而注册接口（auth.ts:316-371）<b>不保留该用户名</b> → 新部署或未配 env 时，任何人注册 <code>ierTMT</code> 即获得全部超管权限（跑迁移/重置任意密码/发卡）。修法：改用 role 判定 + env 必须配置 + 注册黑名单。</p>
+  </div>
+  <div class="root-cause">
+    <div class="title">P0-3 · 火山 webhook 无验签（index.ts:648-719）</div>
+    <p class="small">v1.12.04b <b>故意移除 HMAC 验签</b>（仅数字 task_id 校验）→ 未认证可写任意 R2 键 <code>volcengine_callbacks/{id}</code> + 唤醒任意任务 DO。修法：恢复 HMAC 验签（参考 ASR 回调 index.ts:1085-1128 的成熟实现）。</p>
+  </div>
+</div>
+
+<h3>22.2 P1 风险（资金/数据安全缺陷）</h3>
+<div class="card">
+  <table>
+    <tr><th>#</th><th>风险</th><th>位置</th><th>说明</th></tr>
+    <tr><td>P1-1</td><td>结算/解冻 TOCTOU 双花</td><td>credit-freeze.ts:90-131/147-170</td><td>锁状态更新有条件、余额变更无条件，并发 settle/release 可重复扣/退积分 → 余额变更并入同一 WHERE status 条件</td></tr>
+    <tr><td>P1-2</td><td>Whop 幂等非原子</td><td>webhook.router.ts:234-250</td><td>SELECT→INSERT 竞态，并发重放（合法签名）可双倍入账 → 改单语句条件 INSERT</td></tr>
+    <tr><td>P1-3</td><td>/files/ 无对象级授权</td><td>download.router.ts:100-143</td><td>任一登录用户可读非 voices 前缀的全部 R2 对象（UUID 兜底难猜，但需知晓）</td></tr>
+    <tr><td>P1-4</td><td>r2_key 客户端可控</td><td>task-upload.ts:40-52</td><td>source_r2_key 未校验归属，可引用他人 R2 文件入自己任务</td></tr>
+    <tr><td>P1-5</td><td>错误信息泄漏</td><td>index.ts:397/959 等 7 处</td><td>非 AuthError 直接回 err.message（D1/内部异常细节）→ 统一脱敏</td></tr>
+    <tr><td>P1-6</td><td>admin 直接充值无日限额</td><td>admin.router.ts:599-625</td><td>credit_admin 被攻破 = 无限铸币 → 增加每日充值/发卡限额</td></tr>
+  </table>
+</div>
+
+<h3>22.3 P2 加固项与"已确认安全"清单</h3>
+<div class="card">
+  <h4>P2 加固项</h4>
+  <ul>
+    <li>JWT 无吊销/轮换（auth.ts:467-488）：旧 refresh token 7 天内持续有效 → 增加版本号吊销或缩短有效期。</li>
+    <li>UploadSessionDO 无鉴权绑定（upload-session-do.ts）：UUID 即凭证 → 绑定 user_id。</li>
+    <li>CORS *.pages.dev 通配（shared.ts:523-533）+ X-Admin-Key 非恒定时间比较（index.ts:828-836）。</li>
+    <li>WS ?token= URL 传参（index.ts:992）：可能入日志 → 已提供 ticket 方案缓解，推广使用。</li>
+  </ul>
+  <h4>已确认安全（无需改动）</h4>
+  <ul>
+    <li>JWT HMAC-SHA256 + 常量时间比较 + exp 校验；PBKDF2 100k 迭代 + 16 字节盐；bcrypt 老哈希向后兼容静默升级。</li>
+    <li>JWT_SECRET 无硬编码回退（缺失即抛错）。</li>
+    <li>SQL 全参数化（仅 3 处白名单内插）；无 SSRF 面（fetch 目标均为固定域名）；无路径遍历。</li>
+    <li>D1 原子限流 UPSERT（rate-limit.ts:47-72）；上传 MIME 白名单 + 魔数双重校验 + 分片首片魔数。</li>
+    <li>CORS 精确白名单（非 pages.dev 部分）；无 token/密码落日志。</li>
+  </ul>
+</div>
+
+<h3>22.4 用户关切逐项回答</h3>
+<div class="table-wrap">
+<table>
+  <tr><th>用户关切</th><th>现状</th><th>结论</th></tr>
+  <tr><td>积分不能透支</td><td>冻结结算三段式 + frozen_credits ≤ credits + Math.min(扣费,余额)</td><td><span class="pill good">已实现</span>（并发双花 P1-1 需修）</td></tr>
+  <tr><td>积分不能被盗取</td><td>兑换码 CSPRNG 待修（P0-1）、admin 充值限额待补（P1-6）、Whop 幂等待修（P1-2）</td><td><span class="pill p0">3 处资金漏洞需修</span></td></tr>
+  <tr><td>账号丢失风险</td><td>密码 PBKDF2 哈希 + 重置令牌 1h 有效期；JWT 7d refresh 无吊销</td><td><span class="pill p1">基本安全，吊销机制可加固</span></td></tr>
+  <tr><td>网站不被攻击</td><td>DDoS/CDN/WAF（CF 平台层）+ 应用层限流/魔数校验/参数化查询</td><td><span class="pill good">基础扎实</span>（超管判定 P0-2 需修）</td></tr>
+  <tr><td>用户资料安全保存</td><td>密码哈希存储、无敏感日志、错误消息脱敏待统一（P1-5）</td><td><span class="pill p1">基本安全，脱敏需统一</span></td></tr>
+</table>
+</div>
+
+<div class="verdict warn">安全修复优先级：P0-1/P0-2/P0-3（资金与提权）→ P1-1/P1-2（资金双花）→ P1-3~P1-6 → P2。全部为机制级修复（改熵源/改判定/恢复验签/原子化），非打补丁。</div>
+
+<h2 id="s19"><span class="num">19</span>结论</h2>
+
+<div class="card">
+  <p><b>总体判断：程序主体流畅完整，架构设计达到较高水准，但距离"顶级克隆翻译配音"存在 3 个机制级缺陷（A/B/C）和若干链路缺口。</b></p>
+  <ul>
+    <li><b>分离/混音/合成链路</b>：火山分离正常、BGM 正常路径保留混音、视频前端合成 —— 架构正确；本次"无 BGM"是分离超时偶发，非设计缺陷。</li>
+    <li><b>翻译链路</b>：语言对策略设计地道但主路径失效（缺陷 A），是"译文不地道 + 源语言混入 + 纯汉字中文发音"的总根因。</li>
+    <li><b>性别链路</b>：F0 存在但"只填空不覆盖"（缺陷 C）+ 时长兜底恒判女声，是"全女声无男声"的核心机制。</li>
+    <li><b>SRT 链路</b>：文本/时间轴质量提升正确，但说话人恒单（缺陷 B）+ 角色/性别/情感缺失。</li>
+    <li><b>情感/克隆</b>：情感确实传入 TTS（instruction+volume+SSML），但 ASR 情感死数据 + 克隆质量受参考段/跨语言限制。</li>
+    <li><b>卡顿</b>：10%/55%/72% 是"长步骤无中间进度 + D1 写入降频"的同一类问题，应机制级统一解决。</li>
+  </ul>
+  <p class="small" style="margin-top:12px">以上为只读调查结论，未修改任何代码。等待用户命令后按 P0→P1→P2 顺序实施修复。</p>
+</div>
+
+<footer>
+  <div class="sources">
+    <h2>Sources</h2>
+    <ol>
+      <li id="cite-1"><span class="src-title">用户上传的 Pipeline 核心流程图（图片）+《Pipeline流程图逐节点详解》逐节点转译</span><span class="src-url">User-uploaded document</span></li>
+      <li id="cite-2"><span class="src-title">《Pipeline - 多角色长视频克隆配音_5美元约束下顶级质量优化方案》—— IndexTTS-2.5 托管风险与优化设计</span><span class="src-url">User-uploaded document</span></li>
+      <li id="cite-3"><span class="src-title">Cloudflare R2 官方定价页：免费额度 10 GB-month、Class A 1M/月、Class B 10M/月、超量 $0.015/GB-month</span><span class="src-url">https://developers.cloudflare.com/r2/pricing/</span></li>
+      <li id="cite-4"><span class="src-title">Cloudflare Workers Limits 官方文档：CPU 5min/请求、Cron 30s（&lt;1h 间隔）/15min（≥1h 间隔）、D1 5GB、KV 1GB</span><span class="src-url">https://developers.cloudflare.com/workers/platform/limits/</span></li>
+      <li id="cite-5"><span class="src-title">Cloudflare Rates 官方页：Containers vCPU $0.000020/s、内存 $0.0000025/GiB-s、磁盘 $0.00000007/GB-s、出口 $0.025/GB；Workers Paid 内含 375 vCPU-min、25 GiB-hrs、200 GB-hrs</span><span class="src-url">https://www.cloudflare.com/rates/</span></li>
+      <li id="cite-6"><span class="src-title">Sliplane《Cloudflare Containers in 2026》：Workers Paid $5 内含额度表、10ms 计费、4 vCPU/12 GiB 上限、冷启动 2-3s</span><span class="src-url">https://sliplane.io/blog/cloudflare-released-containers-everything-you-need-to-know</span></li>
+      <li id="cite-7"><span class="src-title">AutoKaam《Cloudflare Containers Hit GA》：2026-04-13 GA、active-CPU 计费、无自动伸缩/无 GPU/无持久盘</span><span class="src-url">https://autokaam.com/news/cloudflare-containers-ga-vps-obsolete-2026/</span></li>
+    </ol>
+  </div>
+  <p style="margin-top:16px">本报告基于代码审计（vcd-app/frontend/worker）与 D1 生产库实证（tasks / segments / speaker_tracks / pipeline_events / api_call_logs）撰写。§20-§22 另基于 Cloudflare 官方定价/限额文档与安全专项审计（auth / credit / rate-limit / webhook / download / admin 等 15+ 文件）。所有结论均有文件路径 + 行号 + 代码摘录支撑。</p>
+</footer>
+
+</div>
+
+
+</body></html>

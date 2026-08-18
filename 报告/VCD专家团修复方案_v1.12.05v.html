@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VCD 专家团修复方案 v1.12.05v</title>
+<style>
+  :root { --bg:#0d1117; --card:#161b22; --border:#30363d; --text:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --good:#3fb950; --warn:#d29922; --bad:#f85149; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:'Segoe UI','Microsoft YaHei',sans-serif; line-height:1.65; }
+  .wrap { max-width:1080px; margin:0 auto; padding:24px 20px 60px; }
+  .hero { background:linear-gradient(135deg,#1f2937,#0d1117); border:1px solid var(--border); border-radius:14px; padding:28px 30px; margin-bottom:24px; }
+  .tag { display:inline-block; background:#21262d; border:1px solid var(--border); color:var(--accent); font-size:12px; padding:3px 10px; border-radius:20px; margin-bottom:10px; }
+  h1 { font-size:26px; margin-bottom:8px; }
+  .sub { color:var(--muted); font-size:14px; }
+  .meta { margin-top:12px; display:flex; gap:18px; flex-wrap:wrap; font-size:13px; color:var(--muted); }
+  .meta b { color:var(--text); }
+  h2 { font-size:21px; margin:36px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  h3 { font-size:16px; margin:20px 0 10px; color:var(--accent); }
+  h4 { font-size:14px; margin:14px 0 8px; }
+  p { margin:8px 0; font-size:14px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 18px; margin:12px 0; }
+  table { width:100%; border-collapse:collapse; margin:12px 0; font-size:13px; }
+  th { background:#21262d; text-align:left; padding:8px 10px; border:1px solid var(--border); font-weight:600; }
+  td { padding:8px 10px; border:1px solid var(--border); vertical-align:top; }
+  code { background:#21262d; border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:12px; font-family:Consolas,monospace; }
+  pre { background:#0a0e14; border:1px solid var(--border); border-radius:8px; padding:14px; overflow-x:auto; font-size:12.5px; font-family:Consolas,monospace; line-height:1.6; margin:10px 0; }
+  .verdict { border-radius:10px; padding:14px 16px; margin:14px 0; font-size:14px; border:1px solid; }
+  .ok { background:rgba(63,185,80,.08); border-color:var(--good); }
+  .warn { background:rgba(210,153,34,.08); border-color:var(--warn); }
+  .bad { background:rgba(248,81,73,.08); border-color:var(--bad); }
+  .info { background:rgba(88,166,255,.06); border-color:var(--accent); }
+  .pill { display:inline-block; font-size:11px; padding:1px 8px; border-radius:10px; margin-right:4px; }
+  .p0 { background:rgba(248,81,73,.15); color:#ff7b72; }
+  .p1 { background:rgba(210,153,34,.15); color:#d29922; }
+  .p2 { background:rgba(88,166,255,.12); color:#58a6ff; }
+  .good { background:rgba(63,185,80,.15); color:#3fb950; }
+  .flow { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:10px 0; font-size:13px; }
+  .step { background:#21262d; border:1px solid var(--border); padding:5px 12px; border-radius:8px; }
+  .arrow { color:var(--muted); }
+  ol, ul { margin:8px 0 8px 22px; font-size:14px; }
+  li { margin:5px 0; }
+  .small { font-size:12px; color:var(--muted); }
+  .root-cause { border-left:3px solid var(--bad); background:#1a1f26; padding:10px 14px; margin:10px 0; border-radius:0 8px 8px 0; }
+  .title { font-weight:600; margin-bottom:6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <span class="tag">专家团方案定稿 · 暂不修改代码 · 等待确认后动工</span>
+  <h1>VCD 专家团系统修复方案（v1.12.05v）</h1>
+  <p class="sub">基于任务 b7a5f268 实证 + 三项深度代码审计 · 五个问题的根因链 + 机制级修复方案 + 死代码清理清单</p>
+  <div class="meta">
+    <span>报告日期：<b>2026-08-18</b></span>
+    <span>基线版本：<b>v1.12.05v</b></span>
+    <span>调查方式：<b>生产库实证 + 三项并行代码审计</b></span>
+    <span>代码改动：<b>0（等待确认）</b></span>
+  </div>
+</header>
+
+<div class="verdict bad"><b>总体判断</b>：五个问题的根因已全部定位到代码行，且相互关联成一条"状态断连链"——克隆成功但音色未消费（全女声）、B 波尾段挂起导致状态断连（55% 卡顿）、时长校验被打假（句子重叠）、前端 BGM 系数未对齐（背景音小）。<b>全部可在原程序框架内系统修复，复用已有优秀方案，不新增模块。</b></div>
+
+<h2>一、问题全景与根因链（一句话结论）</h2>
+<table>
+  <tr><th>问题</th><th>根因链（已定位）</th><th>性质</th></tr>
+  <tr><td>全片女声 + 情感不足</td><td>克隆成功（spk_1 有真实音色）但 <code>state.voiceId='qwen_system'</code> 全局毒化 → queue-workers 任务级 OR 短路覆盖逐说话人音色 → TTS 全系统音；<code>qwen_system</code>+性别缺失 → resolveQwenVoiceId 确定性女声</td><td><span class="pill p0">P0 音色链断连</span></td></tr>
+  <tr><td>句子时长"打假" + 首句被二句压上</td><td>drift 校验读的 <code>seg.durationMs</code> 已被 WSOLA 修正值覆盖（stage-align.ts:218 打假）→ 真实偏差永未检出；<code>enableOverlapLayering=true</code> 允许本段延伸至下一句 endMs（dsp-merge.ts:977-982 主动制造重叠）</td><td><span class="pill p0">P0 时长链失真</span></td></tr>
+  <tr><td>背景音声音小</td><td>前端下载路径 bgmGain=0.35（-9.1dB）远低于后端 -2dB（双方案并存）；&gt;50MB 长视频跳过后端混音（v1.12.4e 守卫）</td><td><span class="pill p1">P1 系数不统一</span></td></tr>
+  <tr><td>10% 卡顿</td><td>ASR 提交后纯轮询空转，无并行任务（克隆预取/预算预检均未接线）；已修复进度平滑</td><td><span class="pill p2">P2 并行缺口</span></td></tr>
+  <tr><td>55% 卡顿（5分33秒）</td><td>B 波尾段无 io-timeout 保护挂起 ~333s → 360s 步骤超时 → bWaveDone 内存标记丢失（断连窗口）→ 重入恢复不命中（克隆降级场景）→ B 波重跑</td><td><span class="pill p1">P1 状态断连</span></td></tr>
+</table>
+
+<h2>二、问题 1：全片女声 + 情感不足（TTS 音色链断连）</h2>
+
+<div class="card">
+  <h4>根因链（三层断点）</h4>
+  <div class="flow">
+    <span class="step">克隆成功写 speaker_tracks（spk_1 真实音色）</span><span class="arrow">→</span>
+    <span class="step">DO 重启 state.voiceId 丢失</span><span class="arrow">→</span>
+    <span class="step">orchestrator.ts:1100 无条件落 qwen_system</span><span class="arrow">→</span>
+    <span class="step">queue-workers:350 任务级 OR 短路</span><span class="arrow">→</span>
+    <span class="step">所有句子 qwenSystemFallback</span><span class="arrow">→</span>
+    <span class="step">resolveQwenVoiceId 确定性女声</span>
+  </div>
+  <p class="small">关键证据：speaker_tracks 中 spk_1 有真实音色（克隆成功），但 TTS 块消息 voice=qwen_system（tts_error_full 事件实证），且 qwen_system+gender 缺失时 tts-engines.ts:177-181 回退 longanlingxi（女声）——即使 spk_1 标记 male 也因音色未消费而听不出。</p>
+</div>
+
+<h3>系统修复方案（4 处改动，收敛到"逐说话人音色永远可消费"单一语义）</h3>
+<div class="card">
+  <table>
+    <tr><th>#</th><th>改动</th><th>位置</th><th>系统化理由</th></tr>
+    <tr><td>1</td><td>删除任务级 OR 短路：<code>qwenSystemFallback</code> 只判 <code>speakerVoiceIds[s.speakerId]==='qwen_system'</code></td><td>queue-workers.ts:350-351</td><td>顶层 voiceId 仅作无 map 时的回退；一处修改修复所有"顶层毒化"任务</td></tr>
+    <tr><td>2</td><td>空 voiceId 分支改为从 speaker_tracks 恢复真实音色（复用 :803-815 同款恢复），仅确实无真实音色才落 qwen_system</td><td>orchestrator.ts:1068-1104</td><td>消除"DB 有音色但状态置 qwen_system"的断连窗口</td></tr>
+    <tr><td>3</td><td>顶层 voiceId 兜底改源：<code>degradedVoiceId || speakerVoiceIds[主说话人] || 'qwen_system'</code></td><td>stage-tts.ts:951</td><td>顶层与逐说话人 map 同源，杜绝"恢复成功但顶层还是 qwen_system"</td></tr>
+    <tr><td>4</td><td><code>resolveQwenVoiceId</code> 占位音色 + 性别缺失时改 hash 50/50（复用 :225-231 既有 hash 分支）</td><td>tts-engines.ts:177-181</td><td>消灭"gender 丢失 → 100% 女声"的系统性最坏默认</td></tr>
+  </table>
+  <p class="small"><b>情感收益</b>：修复后 CosyVoice 克隆音色真正进入 TTS，instruction/volume/SSML 情感参数才有载体（系统音情感弱是因为情感参数被 Qwen 系统音色弱化）。</p>
+</div>
+
+<h2>三、问题 2：句子时长"打假" + 首句被二句压上</h2>
+
+<div class="card">
+  <h4>根因链</h4>
+  <ul>
+    <li><b>校验被打假</b>：drift 检测读 <code>seg.durationMs</code>（stage-align.ts:218 已被 WSOLA 修正值覆盖）→ TTS 产物与目标槽的真实偏差从未检出；失败线（300ms/20%）宽于纠偏能力（15%）+ wsolaHeavy 豁免 → 校验形同虚设</li>
+    <li><b>主动制造重叠</b>：<code>enableOverlapLayering=true</code>（stage-merge.ts:1115）→ dsp-merge.ts:977-982 本段 PCM 可延伸至<b>下一段的 endMs</b>（非下一句起点），重叠区仅 2kHz 低通让位</li>
+    <li><b>前端无保护</b>：spliceByTimeline 按 startMs 硬放置、无 WSOLA 无校验，超长段后写覆盖先写</li>
+    <li><b>历史教训回退</b>：v5.9.52 移除"间隙借用"（因造成重叠），v1.10.87 以 800ms 地板形式恢复——同一链路两套方案并存（借用语义"不覆盖下一句" vs 分层语义"覆盖到下一句 endMs"互相矛盾）</li>
+  </ul>
+</div>
+
+<h3>系统修复方案（校验恢复 + 重叠收敛 + 句间保护）</h3>
+<div class="card">
+  <table>
+    <tr><th>#</th><th>改动</th><th>位置</th><th>系统化理由</th></tr>
+    <tr><td>1</td><td>TTS 段合成返回后立即比对"实际时长 vs ASR 槽长"，记录原始偏差（不被后续 WSOLA 覆盖）；drift 改用原始合成时长</td><td>tts.ts / stage-align.ts</td><td>恢复真实校验——"时长打假"的根本消除</td></tr>
+    <tr><td>2</td><td>分层延伸上限从"下一段 endMs"收回到"下一段 startMs - 100ms"（与 parseSRT 100ms 间隙保护语义统一）</td><td>dsp-merge.ts:977-982</td><td>收敛重叠方案——不再两套并存，句间 100ms 间隙成为唯一语义</td></tr>
+    <tr><td>3</td><td>merge 层目标槽上限 <code>nextStartMs - 100ms</code>；溢出优先找停顿点截断而非延伸</td><td>dsp-merge.ts:925</td><td>句间保护下沉到拼接层（前端/后端同语义）</td></tr>
+    <tr><td>4</td><td>drift 不合格走"按段 WSOLA 修正 + 复核"闭环，替代"宽失败线 + RETRY 重合成"（省 API、不打假）</td><td>stage-align.ts:255-328</td><td>校验与重试解耦——修正优于重跑</td></tr>
+  </table>
+  <div class="verdict warn">需要决策：分层模式（enableOverlapLayering）是<b>收回上限</b>（方案 2，保留分层能力但限定不越下一句）还是<b>直接关闭</b>（最保守，零重叠风险但可能丢失"自然过渡"听感）？<b>专家团建议收回上限</b>——保留分层的人声自然性，同时用 100ms 间隙保证不压台词。</div>
+</div>
+
+<h2>四、问题 3：背景音声音小</h2>
+
+<div class="card">
+  <h4>根因链</h4>
+  <ul>
+    <li><b>前端下载路径系数偏低</b>：<code>audio-synth.ts:149-175</code> bgmGain 默认 0.35（-9.1dB），人声帧 duck 至最低 0.15（-16.5dB）——而<b>后端混音默认 -2dB（0.79x）</b>。同一任务前后端听感不一致（双方案并存，前端是下载实际听到的路径）</li>
+    <li><b>&gt;50MB 长视频断连</b>：v1.12.4e C2 守卫（stage-merge.ts:1384-1394）跳过后端 BGM 混音，仅纯人声 + 独立 BGM 轨 → 前端若未正确混入则背景音缺失/极小</li>
+    <li><b>三处调用参数不一致</b>：多段混音走 RMS 自动匹配（-2~-6dB），单段/块级混音用默认 -2dB，未走自动匹配</li>
+  </ul>
+  <p class="small"><b>已被绕过的最佳方案</b>：v1.11.28 曾删除 <code>SKIP_BACKEND_BGM_MIX</code> 开关（生产 SKIP=true 曾致无背景音），现已恒执行——但 50MB 守卫仍是事实上的"禁用"；FFmpeg loudnorm 因 DO 128MB OOM 永久禁用（stage-merge.ts:8-11），由 JS <code>normalizeLoudness</code> 接管（替代方案已在运行）。</p>
+</div>
+
+<h3>系统修复方案（系数统一 + 大文件块级混音全量覆盖）</h3>
+<div class="card">
+  <table>
+    <tr><th>#</th><th>改动</th><th>位置</th><th>系统化理由</th></tr>
+    <tr><td>1</td><td>前端 <code>mixVoiceWithBgm</code> bgmGain 与后端对齐（0.5-0.6 起步，duck 下限 0.25 而非 0.15）</td><td>audio-synth.ts:149-175</td><td>消除前后端听感不一致（前端是下载实际路径）</td></tr>
+    <tr><td>2</td><td>&gt;50MB 大文件改为块级混音全量覆盖（复用已有 L1445-1495 块级混音，删除"跳过"分支）</td><td>stage-merge.ts:1384-1394</td><td>复用已有能力，不再"断连"</td></tr>
+    <tr><td>3</td><td>单段/块级路径补传 <code>duckingOptions</code>（复用 L1537-1570 的 RMS 自动匹配）</td><td>stage-merge.ts:1460/1771</td><td>三处调用参数收敛一致</td></tr>
+  </table>
+</div>
+
+<h2>五、问题 4：10% 卡顿（ASR 轮询空转）</h2>
+
+<div class="card">
+  <h4>现状与根因</h4>
+  <p>10% 的组成 = 分离（本次 103s，正常）+ ASR 服务端耗时 + 轮询感知。ASR 提交成功后进入<b>纯轮询空转</b>（DO alarm → 单次轮询 → setAlarm），CPU/时间片完全闲置。</p>
+  <p class="small"><b>已实现的优秀方案（确认在运行）</b>：分离∥ASR 提前提交（v1.10.69/v1.12.04d，分离返回即用火山临时 URL 提前提交 ASR）、回调模式前 8 轮 2s 高频探测、长视频 VAD 8 路并发。这些是本任务 10% 只花 ~2.5 分钟的原因。</p>
+</div>
+
+<h3>系统修复方案（复用已有并行骨架，不新增模块）</h3>
+<div class="card">
+  <table>
+    <tr><th>#</th><th>改动</th><th>位置</th><th>系统化理由</th></tr>
+    <tr><td>1</td><td>预算预检（checkPreExecutionBudget）移入 B 波，与克隆/翻译并行执行（依赖 ASR 完成后即可，不依赖 B 波结果）</td><td>orchestrator.ts B 波</td><td>B 波已有三路并发骨架，第四路成本极低</td></tr>
+    <tr><td>2</td><td>预设音色场景在 ASR 轮询期间真正启动克隆 enrollment（复用 stage-extract.ts:1362-1395 缓存预热点，当前只查缓存不调用）</td><td>stage-extract.ts</td><td>复用既有预热钩子，把"只查缓存"升级为"预热+注册"</td></tr>
+  </table>
+  <p class="small">说明：10% 卡顿的主因是 ASR 服务端耗时（不可控），进度感知已在批次二修复（每轮心跳平滑）。并行化是锦上添花，非根因修复。</p>
+</div>
+
+<h2>六、问题 5：55% 卡顿（B 波状态断连）</h2>
+
+<div class="card">
+  <h4>根因链（时间线完全吻合 5min33s）</h4>
+  <div class="flow">
+    <span class="step">B 波三路 allSettled 完成（12:50:18）</span><span class="arrow">→</span>
+    <span class="step">合并尾段（落库/flags/进度）无 io-timeout → 挂起 ~333s</span><span class="arrow">→</span>
+    <span class="step">speaker 步骤 360s 超时（Promise.race）</span><span class="arrow">→</span>
+    <span class="step">abort → bWaveDone 内存标记未持久化（断连窗口）</span><span class="arrow">→</span>
+    <span class="step">重入 D1 恢复（v1.10.71）</span><span class="arrow">→</span>
+    <span class="step">克隆降级场景恢复不命中 → B 波重跑（重复克隆+翻译）</span>
+  </div>
+  <p class="small"><b>时间账</b>：12:55:51 − 360s − 5s ≈ 12:49:46 = B 波启动点；bwave_results 在启动后 32s 产生（三路并行正常）。5min33s 间隙 = 尾段挂起 ~333s + 超时 5s 重试。<b>分毫不差</b>。</p>
+</div>
+
+<h3>系统修复方案（原子化消除断连窗口，复用 io-timeout 机制）</h3>
+<div class="card">
+  <table>
+    <tr><th>#</th><th>改动</th><th>位置</th><th>系统化理由</th></tr>
+    <tr><td>1</td><td>B 波合并尾段（落库 + pipeline_flags + 进度）整体纳入 io-timeout 保护（复用 stage-extract.ts:966-975 的 io-timeout 模式）</td><td>orchestrator.ts:2821-2839 / 2961-2970</td><td>消除"尾段无超时保护"的挂起面</td></tr>
+    <tr><td>2</td><td>bWaveDone/合并产物在 bwave_results 落库前<b>先持久化</b>（先写 flags 再写事件）</td><td>orchestrator.ts:2705-2708</td><td>消除"事件可见但状态未推进"的断连窗口——根因级修复</td></tr>
+    <tr><td>3</td><td>runBWaveParallelBranch 入口检查 bWaveDone（L905 无条件重跑 → 加门）</td><td>orchestrator.ts:905</td><td>防止重入重复克隆+翻译（生产 98553a45 曾 22 次调用实证）</td></tr>
+    <tr><td>4</td><td>D1 恢复条件放宽：speaker_tracks 全 qwen_system（克隆降级）时也恢复 bWaveDone</td><td>orchestrator.ts:766-849</td><td>克隆降级场景不再重跑整个 B 波</td></tr>
+  </table>
+</div>
+
+<h2>七、死代码清理清单（已核实零引用）</h2>
+
+<div class="card">
+  <h4>A 类：13 个已从编译排除 + 全库零引用（tsconfig.worker.json:25-38 官方注册表）</h4>
+  <p><code>cost-guard.ts</code> / <code>scene-detector.ts</code> / <code>pipeline/scene-detection-engine.ts</code> / <code>pipeline/two-pass-orchestrator.ts</code> / <code>pipeline/scene-manager.ts</code> / <code>auto-proofread.ts</code> / <code>external-remux.ts</code> / <code>flac-utils.ts</code> / <code>voice-enrollment-pool.ts</code> / <code>pipeline/stage-proofread.ts</code> / <code>pipeline/errors.ts</code> / <code>utils/audio.ts</code> / <code>packages/audio-core-fallback/src/mixer.ts</code></p>
+  <p class="small">均为"已删除但目录项残留"（.gitignore:47-56 + tsconfig exclude 即为删除防重加标记）。物理删除 + 清残留索引即可收敛。</p>
+  <h4>B 类：部分死体</h4>
+  <p><code>ffmpeg-wasm-integration.ts</code>：<code>burnSubtitles</code> 恒空 stub、<code>muxDubbedVideo</code>/<code>extractAudio</code>/<code>preloadFFmpeg</code> 三导出全库零调用 → 整个文件降为注释文档或删除。</p>
+  <h4>C 类：确认非死代码（勿删）</h4>
+  <p><code>pipeline.ts</code>（DO/路由活跃导入）、<code>dual-track-separation.ts</code>（stage-clone/stage-speaker 使用）、<code>complexity-score.ts</code>（stage-speaker 使用）。</p>
+</div>
+
+<h2>八、修复优先级与实施顺序（质量优先定稿）</h2>
+
+<div class="card">
+  <table>
+    <tr><th>批次</th><th>内容</th><th>价值</th><th>决策确认</th></tr>
+    <tr><td><b>修复批次 A</b></td><td>问题 1（TTS 音色链 4 处）+ 问题 2（时长校验 + 重叠收敛 4 处）+ <b>克隆 prefix 净化（1 行）</b></td><td>全女声消失、情感回归、句子不再重叠、克隆成功率恢复——本片最直观的四大问题</td><td><span class="pill p0">已确认（含 prefix 合并）</span></td></tr>
+    <tr><td><b>修复批次 B</b></td><td>问题 3（BGM：<b>复用后端 v1.12.02/R3 RMS 双向匹配到前端</b>，非静态系数）+ 问题 5（B 波原子化 4 处）</td><td>背景音恢复≈语音 80% 动态匹配、55% 卡顿断连根治</td><td><span class="pill p0">已确认（RMS 方案）</span></td></tr>
+    <tr><td><b>批次三前端</b></td><td>前端四阶段进度显示 + 配音音库 6 项完善 + SRT 流程统一（前后端）</td><td>产品体验升级</td><td><span class="pill p1">已确认（统一安排分批提交）</span></td></tr>
+    <tr><td><b>修复批次 C</b></td><td>问题 4（10% 并行 2 处）</td><td>长视频 ASR 期间资源利用</td><td><span class="pill p2">确认</span></td></tr>
+    <tr><td><b>清理批次 D</b></td><td>死代码 A/B 类物理删除</td><td>维护收敛</td><td><span class="pill p2">确认</span></td></tr>
+  </table>
+  <div class="verdict info">实施原则：全部为原框架内的改动（改既有文件、复用既有模式），<b>不新增模块、不引入新依赖</b>；每批次独立提交验证；修复批次 A 前先跑全量单元测试建立基线。BGM 前端修复复用后端 <code>voiceRmsDb - bgmRmsDb - 2dB</code> 算法（stage-merge.ts:1533-1563，前后端同一语义）。</div>
+</div>
+
+<h2>九、决策点确认记录（用户已定稿）</h2>
+<div class="card">
+  <ol>
+    <li><b>分层模式</b>：确认"收回上限到下一句 startMs - 100ms"——即恢复源程序既有"槽内 WSOLA 伸缩 + 100ms 间隙"语义；<b>不关闭分层</b>（保留自然过渡，关闭会影响句子意思）。</li>
+    <li><b>BGM 系数</b>：不采用静态系数——<b>复用源程序 v1.12.02/R3 双向 RMS 自动匹配</b>（BGM 输出 ≈ 语音 -2dB ≈ 80% 音量，随语音音量动态调节），前端与后端同算法。</li>
+    <li><b>修复顺序</b>：以质量为主——批次 A → B → 批次三前端 → C → D。</li>
+    <li><b>克隆 prefix 修复</b>：确认并入批次 A（与音色链同链路、一次回归、一行改动风险极低）。</li>
+    <li><b>批次三</b>：确认统一安排，按"后端音色+时长 → BGM+B 波 → 前端四阶段 → 音库 → SRT → 清理"分批提交验证。</li>
+  </ol>
+</div>
+
+<footer style="margin-top:40px; padding-top:16px; border-top:1px solid var(--border); color:var(--muted); font-size:12px;">
+  <p>本方案基于任务 b7a5f268 生产实证（pipeline_events/speaker_tracks/task_heartbeat）与三项深度审计（TTS 音色映射链 / BGM 与时长对齐 / 并发与死代码）撰写。全部结论有文件路径 + 行号支撑。等待用户确认决策点后按批次动工。</p>
+</footer>
+
+</div>
+</body>
+</html>
